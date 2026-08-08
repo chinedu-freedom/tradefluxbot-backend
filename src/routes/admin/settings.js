@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import { getSecurityPassword, setSecurityPassword } from '../../lib/security.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -172,6 +173,32 @@ router.get('/email/logs', async (req, res) => {
     res.json(logs);
   } catch (error) {
     res.status(500).json({ error: 'Failed to fetch email logs' });
+  }
+});
+
+// ----- Verification Password Settings -----
+router.get('/security', async (req, res) => {
+  try {
+    res.json({ success: true, password: getSecurityPassword() });
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'Failed to fetch verification password' });
+  }
+});
+
+router.put('/security', async (req, res) => {
+  try {
+    const { password } = req.body;
+    if (!password) {
+      return res.status(400).json({ success: false, error: 'Password is required' });
+    }
+    const success = setSecurityPassword(password);
+    if (success) {
+      res.json({ success: true, message: 'Verification password updated successfully' });
+    } else {
+      res.status(500).json({ success: false, error: 'Failed to update verification password' });
+    }
+  } catch (error) {
+    res.status(500).json({ success: false, error: 'An error occurred', details: error.message });
   }
 });
 

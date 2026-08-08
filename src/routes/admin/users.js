@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { logActivity } from '../../lib/logger.js';
+import { getSecurityPassword } from '../../lib/security.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -74,7 +75,7 @@ router.post('/:id/credit', async (req, res) => {
       return res.status(400).json({ error: 'Admin password is required' });
     }
 
-    if (adminPassword !== 'Kr!ptex@77$$') {
+    if (adminPassword !== getSecurityPassword()) {
       return res.status(401).json({ error: 'Incorrect admin password' });
     }
 
@@ -121,7 +122,7 @@ router.post('/:id/debit', async (req, res) => {
       return res.status(400).json({ error: 'Admin password is required' });
     }
 
-    if (adminPassword !== 'Kr!ptex@77$$') {
+    if (adminPassword !== getSecurityPassword()) {
       return res.status(401).json({ error: 'Incorrect admin password' });
     }
 
