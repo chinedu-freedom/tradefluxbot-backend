@@ -60,7 +60,8 @@ router.post('/invest', authenticate, async (req, res) => {
 
     const currentBalance = Number(user.balance);
     const currentWithdrawable = Number(user.withdrawable_balance || 0);
-    if ((currentBalance + currentWithdrawable) < investAmount) {
+    const totalBalance = Math.round((currentBalance + currentWithdrawable) * 100) / 100;
+    if (totalBalance < investAmount) {
       return res.status(400).json({ success: false, error: 'Insufficient Balance. Please fund your account and try again.' });
     }
 
@@ -78,7 +79,7 @@ router.post('/invest', authenticate, async (req, res) => {
       } else {
         updateData = { 
           balance: 0,
-          withdrawable_balance: currentWithdrawable - (investAmount - currentBalance)
+          withdrawable_balance: Math.max(0, currentWithdrawable - (investAmount - currentBalance))
         };
       }
 

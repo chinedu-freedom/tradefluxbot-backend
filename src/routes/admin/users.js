@@ -22,6 +22,7 @@ router.get('/', async (req, res) => {
   }
 });
 
+
 // Get user details
 router.get('/:id', async (req, res) => {
   try {
@@ -39,6 +40,7 @@ router.get('/:id', async (req, res) => {
     res.status(500).json({ success: false, error: 'Failed to fetch user' });
   }
 });
+
 
 // Update user settings/permissions
 router.put('/:id', async (req, res) => {
