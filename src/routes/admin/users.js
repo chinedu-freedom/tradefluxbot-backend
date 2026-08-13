@@ -103,7 +103,7 @@ router.post('/:id/credit', async (req, res) => {
           amount: amount,
           balance_before: currentBalance,
           balance_after: newBalance,
-          description: reason || 'Deposit successful'
+          description: reason || 'Deposit Successful'
         }
       })
     ]);
