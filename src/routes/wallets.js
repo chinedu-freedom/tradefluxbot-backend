@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
+import bcrypt from 'bcrypt';
 import { authenticate } from '../middleware/auth.js';
 import { logActivity } from '../lib/logger.js';
 
@@ -23,16 +24,31 @@ router.get('/', authenticate, async (req, res) => {
 // Link/Update a wallet address
 router.post('/', authenticate, async (req, res) => {
   try {
-    const { symbol, network, address, label } = req.body;
+    const { symbol, network, address, label, withdrawalPassword } = req.body;
     const userId = req.user.id;
 
-    if (!symbol || !network || !address) {
-      return res.status(400).json({ success: false, error: 'Missing required fields: symbol, network, address' });
+    if (!symbol || !network || !address || !withdrawalPassword) {
+      return res.status(400).json({ success: false, error: 'Missing required fields: symbol, network, address, withdrawalPassword' });
     }
 
     const trimmedAddress = address.trim();
     if (!trimmedAddress) {
       return res.status(400).json({ success: false, error: 'Address cannot be empty' });
+    }
+
+    const user = await prisma.users.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    if (!user.withdrawal_pin) {
+      return res.status(400).json({ success: false, error: 'Please set your withdrawal password in settings before linking a wallet.' });
+    }
+
+    // Verify withdrawal password
+    const isPinValid = await bcrypt.compare(withdrawalPassword, user.withdrawal_pin);
+    if (!isPinValid) {
+      return res.status(400).json({ success: false, error: 'Incorrect withdrawal password' });
     }
 
     // Upsert linked wallet address (unique constraint on user_id, symbol, network)
