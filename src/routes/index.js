@@ -9,6 +9,7 @@ import liveMarketRoutes from './live-market.js';
 import plansRoutes from './plans.js';
 import teamRoutes from './team.js';
 import settingsRoutes from './settings.js';
+import walletsRoutes from './wallets.js';
 
 const router = Router();
 
@@ -22,5 +23,6 @@ router.use('/live-market', liveMarketRoutes);
 router.use('/plans', plansRoutes);
 router.use('/team-members', teamRoutes);
 router.use('/settings', settingsRoutes);
+router.use('/wallets', walletsRoutes);
 
 export default router;

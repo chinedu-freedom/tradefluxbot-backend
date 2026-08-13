@@ -80,6 +80,7 @@ model users {
   user_spins          user_spins[]
   password_resets     password_resets[]
   investment_profits  investment_profits[]
+  user_wallets        user_wallets[]
 
   @@map("users")
 }
@@ -614,4 +615,20 @@ model admin_logs {
   @@index([admin_id])
   @@index([created_at])
   @@map("admin_logs")
+}
+
+model user_wallets {
+  id         String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id    String   @db.Uuid
+  symbol     String
+  network    String
+  address    String
+  label      String?
+  created_at DateTime @default(now())
+  updated_at DateTime @updatedAt
+
+  user users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, symbol, network])
+  @@map("user_wallets")
 }
