@@ -6,8 +6,10 @@ import {
   sendVerificationEmail,
   sendDepositNotificationEmail,
   sendWithdrawalNotificationEmail,
-  sendPasswordChangeConfirmationEmail
+  sendPasswordChangeConfirmationEmail,
+  sendWithdrawalOtpEmail
 } from '../lib/mailer.js';
+import { generateSecurityOtp, verifySecurityOtp } from '../lib/otpService.js';
 import { logActivity } from '../lib/logger.js';
 
 const router = Router();
@@ -1762,13 +1764,103 @@ router.post('/oxapay-webhook', async (req, res) => {
   return res.status(200).json({ ok: true });
 });
 
+// Send Withdrawal Email Verification OTP
+router.post('/withdraw/send-otp', authenticate, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const { amount, network, wallet_address } = req.body;
+
+    if (!amount || !network || !wallet_address) {
+      return res.status(400).json({ success: false, message: 'Amount, network, and wallet address are required' });
+    }
+
+    const user = await prisma.users.findUnique({ where: { id: userId } });
+    if (!user) {
+      return res.status(404).json({ success: false, message: 'User not found' });
+    }
+
+    if (!user.withdrawal_pin) {
+      return res.status(400).json({ success: false, message: 'Please set your withdrawal password in settings first' });
+    }
+
+    const settings = await prisma.settings.findFirst();
+    const minAmount = Number(settings?.min_withdrawal || 5);
+    const maxAmount = Number(settings?.max_withdrawal || 10000);
+    const symbol = settings?.currency_symbol || '$';
+
+    if (Number(amount) < minAmount) {
+      return res.status(400).json({ success: false, message: `Minimum withdrawal amount is ${symbol}${minAmount}` });
+    }
+
+    if (Number(amount) > maxAmount) {
+      return res.status(400).json({ success: false, message: `Maximum withdrawal amount is ${symbol}${maxAmount}` });
+    }
+
+    const withdrawableBal = Number(user.withdrawable_balance || 0);
+    if (withdrawableBal < Number(amount)) {
+      return res.status(400).json({ success: false, message: 'Insufficient withdrawable balance' });
+    }
+
+    // Verify that the destination wallet address is a linked wallet of this user
+    const linkedWallet = await prisma.user_wallets.findFirst({
+      where: {
+        user_id: userId,
+        address: wallet_address.trim()
+      }
+    });
+
+    if (!linkedWallet) {
+      return res.status(400).json({ success: false, message: 'Withdrawals are only permitted to your verified linked wallet addresses' });
+    }
+
+    const otpResult = generateSecurityOtp(userId, 'WITHDRAWAL', {
+      amount: Number(amount),
+      network,
+      wallet_address: wallet_address.trim()
+    });
+
+    if (!otpResult.success) {
+      return res.status(429).json({
+        success: false,
+        message: otpResult.message,
+        remainingSeconds: otpResult.remainingSeconds
+      });
+    }
+
+    const emailRes = await sendWithdrawalOtpEmail({
+      email: user.email,
+      name: user.full_name || user.username || 'User',
+      amount: Number(amount),
+      currencySymbol: symbol,
+      network,
+      address: wallet_address.trim(),
+      code: otpResult.code
+    });
+
+    if (!emailRes?.success) {
+      return res.status(500).json({ success: false, message: 'Failed to deliver verification code to your email. Please try again.' });
+    }
+
+    res.json({ success: true, message: `Verification code sent to ${user.email}` });
+  } catch (error) {
+    console.error('Send withdrawal OTP error:', error);
+    res.status(500).json({ success: false, message: 'Failed to send withdrawal verification code' });
+  }
+});
+
 router.post('/withdraw', authenticate, async (req, res) => {
   try {
     const userId = req.user.id;
-    const { amount, network, wallet_address, password, method } = req.body;
+    const { amount, network, wallet_address, password, otp, method } = req.body;
 
-    if (!amount || !network || !wallet_address || !password) {
-      return res.status(400).json({ success: false, message: 'All fields are required' });
+    if (!amount || !network || !wallet_address || !password || !otp) {
+      return res.status(400).json({ success: false, message: 'All fields including withdrawal password and email OTP code are required' });
+    }
+
+    // Verify 2-Step Email OTP Code
+    const otpCheck = verifySecurityOtp(userId, 'WITHDRAWAL', otp, true);
+    if (!otpCheck.valid) {
+      return res.status(400).json({ success: false, message: otpCheck.message });
     }
 
     // Fetch global settings
@@ -1792,6 +1884,18 @@ router.post('/withdraw', authenticate, async (req, res) => {
       return res.status(404).json({ success: false, message: 'User not found' });
     }
 
+    // Verify destination wallet is a linked wallet of this user
+    const linkedWallet = await prisma.user_wallets.findFirst({
+      where: {
+        user_id: userId,
+        address: wallet_address.trim()
+      }
+    });
+
+    if (!linkedWallet) {
+      return res.status(400).json({ success: false, message: 'Withdrawals are only permitted to your verified linked wallet addresses' });
+    }
+
     // Verify withdrawal password
     if (!user.withdrawal_pin) {
       return res.status(400).json({ success: false, message: 'Please set your withdrawal password in settings first' });
@@ -1807,6 +1911,7 @@ router.post('/withdraw', authenticate, async (req, res) => {
     if (withdrawableBal < Number(amount)) {
       return res.status(400).json({ success: false, message: 'Insufficient withdrawable balance' });
     }
+
 
     const fees = Number(amount) * feeRate;
     const netAmount = Number(amount) - fees;

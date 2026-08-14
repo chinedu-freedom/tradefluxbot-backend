@@ -350,3 +350,101 @@ export async function sendWithdrawalNotificationEmail({ email, name, crypto, amo
   `;
   return await sendEmail({ to: email, subject, html: emailTemplate(content, siteName) });
 }
+
+export async function sendWithdrawalOtpEmail({ email, name, amount, currencySymbol, network, address, code }) {
+  const siteName = await getSiteName();
+  const symbol = currencySymbol || (await getCurrencySymbol());
+  const subject = `Security Verification: Withdrawal Request - ${siteName}`;
+
+  const content = `
+    <div style="text-align:center; padding:10px 0;">
+      <h2 style="color:#0f172a; margin-bottom:10px;">Withdrawal Verification Code</h2>
+      <p style="color:#475569; font-size:15px; line-height:1.6; margin-bottom: 20px;">
+        Hi <strong>${name || 'User'}</strong>,<br>
+        A request has been initiated to withdraw <strong>${symbol}${amount}</strong> (${network}) to the following linked wallet address:
+      </p>
+      
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin: 15px 0; text-align: left; word-break: break-all; font-family: monospace; font-size: 13px; color: #334155;">
+        <strong>Destination:</strong> ${address}
+      </div>
+
+      <p style="color:#475569; font-size:14px; margin-bottom: 12px;">
+        Please use the 6-digit confirmation code below to authorize this withdrawal:
+      </p>
+
+      <div style="margin:24px 0; text-align:center;">
+        <span style="
+          background: #f5f3ff;
+          color: #6d28d9;
+          padding: 14px 35px;
+          font-size: 28px;
+          font-weight: 800;
+          letter-spacing: 8px;
+          border: 2px dashed #6d28d9;
+          border-radius: 12px;
+          display: inline-block;
+        ">
+          ${code}
+        </span>
+      </div>
+
+      <p style="font-size:14px; color:#64748b; margin-top:16px;">
+        This code is valid for <strong>10 minutes</strong>. Never share this code with anyone.
+      </p>
+      <p style="font-size:12px; color:#94a3b8; margin-top:24px;">
+        If you did not authorize this withdrawal request, please change your password immediately and contact support.
+      </p>
+    </div>
+  `;
+
+  return await sendEmail({ to: email, subject, html: emailTemplate(content, siteName) });
+}
+
+export async function sendWalletLinkOtpEmail({ email, name, symbol, network, address, code }) {
+  const siteName = await getSiteName();
+  const subject = `Security Verification: Link Wallet Address - ${siteName}`;
+
+  const content = `
+    <div style="text-align:center; padding:10px 0;">
+      <h2 style="color:#0f172a; margin-bottom:10px;">Link Wallet Address Verification</h2>
+      <p style="color:#475569; font-size:15px; line-height:1.6; margin-bottom: 20px;">
+        Hi <strong>${name || 'User'}</strong>,<br>
+        A request has been made to link a new <strong>${symbol} (${network})</strong> payout wallet address to your account:
+      </p>
+      
+      <div style="background: #f8fafc; border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px; margin: 15px 0; text-align: left; word-break: break-all; font-family: monospace; font-size: 13px; color: #334155;">
+        <strong>Address:</strong> ${address}
+      </div>
+
+      <p style="color:#475569; font-size:14px; margin-bottom: 12px;">
+        Please enter the 6-digit confirmation code below to authorize linking this wallet:
+      </p>
+
+      <div style="margin:24px 0; text-align:center;">
+        <span style="
+          background: #f5f3ff;
+          color: #6d28d9;
+          padding: 14px 35px;
+          font-size: 28px;
+          font-weight: 800;
+          letter-spacing: 8px;
+          border: 2px dashed #6d28d9;
+          border-radius: 12px;
+          display: inline-block;
+        ">
+          ${code}
+        </span>
+      </div>
+
+      <p style="font-size:14px; color:#64748b; margin-top:16px;">
+        This code is valid for <strong>10 minutes</strong>. Do not share this code with anyone.
+      </p>
+      <p style="font-size:12px; color:#94a3b8; margin-top:24px;">
+        If you did not request to link this wallet, please secure your account immediately.
+      </p>
+    </div>
+  `;
+
+  return await sendEmail({ to: email, subject, html: emailTemplate(content, siteName) });
+}
+
