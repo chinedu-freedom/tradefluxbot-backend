@@ -448,3 +448,48 @@ export async function sendWalletLinkOtpEmail({ email, name, symbol, network, add
   return await sendEmail({ to: email, subject, html: emailTemplate(content, siteName) });
 }
 
+export async function sendPaymentPinOtpEmail({ email, name, code }) {
+  const siteName = await getSiteName();
+  const subject = `Security Verification: Withdrawal Password Update - ${siteName}`;
+
+  const content = `
+    <div style="text-align:center; padding:10px 0;">
+      <h2 style="color:#0f172a; margin-bottom:10px;">Withdrawal Password Authorization</h2>
+      <p style="color:#475569; font-size:15px; line-height:1.6; margin-bottom: 20px;">
+        Hi <strong>${name || 'User'}</strong>,<br>
+        A request has been initiated to set or update your account's <strong>Withdrawal Password</strong>.
+      </p>
+
+      <p style="color:#475569; font-size:14px; margin-bottom: 12px;">
+        Please enter the 6-digit confirmation code below to authorize this change:
+      </p>
+
+      <div style="margin:24px 0; text-align:center;">
+        <span style="
+          background: #f5f3ff;
+          color: #6d28d9;
+          padding: 14px 35px;
+          font-size: 28px;
+          font-weight: 800;
+          letter-spacing: 8px;
+          border: 2px dashed #6d28d9;
+          border-radius: 12px;
+          display: inline-block;
+        ">
+          ${code}
+        </span>
+      </div>
+
+      <p style="font-size:14px; color:#64748b; margin-top:16px;">
+        This code will expire in <strong>10 minutes</strong>. For your security, never share this code with anyone.
+      </p>
+      <p style="font-size:12px; color:#94a3b8; margin-top:24px;">
+        If you did not make this request, please change your login password immediately and contact support.
+      </p>
+    </div>
+  `;
+
+  return await sendEmail({ to: email, subject, html: emailTemplate(content, siteName) });
+}
+
+

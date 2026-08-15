@@ -7,7 +7,8 @@ import {
   sendDepositNotificationEmail,
   sendWithdrawalNotificationEmail,
   sendPasswordChangeConfirmationEmail,
-  sendWithdrawalOtpEmail
+  sendWithdrawalOtpEmail,
+  sendPaymentPinOtpEmail
 } from '../lib/mailer.js';
 import { generateSecurityOtp, verifySecurityOtp } from '../lib/otpService.js';
 import { logActivity } from '../lib/logger.js';
@@ -1001,19 +1002,62 @@ router.put('/me/password', authenticate, async (req, res) => {
   }
 });
 
-// Update Withdrawal Pin
+// Send OTP for updating/resetting withdrawal password
+router.post('/me/payment/send-otp', authenticate, async (req, res) => {
+  try {
+    const user = await prisma.users.findUnique({ where: { id: req.user.id } });
+    if (!user) return res.status(404).json({ success: false, message: 'User not found' });
+
+    const otpResult = generateSecurityOtp(req.user.id, 'PAYMENT_PASSWORD_RESET');
+    if (!otpResult.success) {
+      return res.status(429).json({
+        success: false,
+        message: otpResult.message,
+        remainingSeconds: otpResult.remainingSeconds
+      });
+    }
+
+    const emailRes = await sendPaymentPinOtpEmail({
+      email: user.email,
+      name: user.full_name || user.username || 'User',
+      code: otpResult.code
+    });
+
+    if (!emailRes?.success) {
+      return res.status(500).json({ success: false, message: 'Failed to deliver verification code to your email. Please try again.' });
+    }
+
+    res.json({ success: true, message: `Verification code sent to ${user.email}` });
+  } catch (error) {
+    console.error('Send payment OTP error:', error);
+    res.status(500).json({ success: false, message: 'Failed to send verification code' });
+  }
+});
+
+// Update Withdrawal Pin (requires Email OTP verification)
 router.put('/me/payment', authenticate, async (req, res) => {
   try {
-    const { newPassword } = req.body;
+    const { newPassword, otp } = req.body;
 
     if (!newPassword || newPassword.length < 4) {
       return res.status(400).json({ success: false, message: 'Password must be at least 4 characters' });
+    }
+
+    if (!otp || String(otp).trim().length < 6) {
+      return res.status(400).json({ success: false, message: '6-digit email verification code is required' });
+    }
+
+    // Verify 2-Step Email OTP Code
+    const otpCheck = verifySecurityOtp(req.user.id, 'PAYMENT_PASSWORD_RESET', otp, true);
+    if (!otpCheck.valid) {
+      return res.status(400).json({ success: false, message: otpCheck.message });
     }
 
     const salt = await bcrypt.genSalt(10);
     const pinHash = await bcrypt.hash(newPassword, salt);
 
     await prisma.$executeRaw`UPDATE "users" SET "withdrawal_pin" = ${pinHash} WHERE "id" = ${req.user.id}::uuid`;
+    await logActivity(req.user.id, 'withdrawal pin updated', req);
 
     res.json({ success: true, message: 'Withdrawal password updated successfully' });
   } catch (error) {
@@ -1021,6 +1065,7 @@ router.put('/me/payment', authenticate, async (req, res) => {
     res.status(500).json({ success: false, message: 'Failed to update withdrawal password' });
   }
 });
+
 
 // Delete user account
 router.delete('/me', authenticate, async (req, res) => {
