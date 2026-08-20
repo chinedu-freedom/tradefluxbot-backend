@@ -1898,15 +1898,17 @@ router.post('/withdraw', authenticate, async (req, res) => {
     const userId = req.user.id;
     const { amount, network, wallet_address, password, otp, method } = req.body;
 
-    if (!amount || !network || !wallet_address || !password || !otp) {
-      return res.status(400).json({ success: false, message: 'All fields including withdrawal password and email OTP code are required' });
+    if (!amount || !network || !wallet_address || !password) {
+      return res.status(400).json({ success: false, message: 'All fields including withdrawal password are required' });
     }
 
-    // Verify 2-Step Email OTP Code
+    // Email OTP verification removed by admin request
+    /*
     const otpCheck = verifySecurityOtp(userId, 'WITHDRAWAL', otp, true);
     if (!otpCheck.valid) {
       return res.status(400).json({ success: false, message: otpCheck.message });
     }
+    */
 
     // Fetch global settings
     const settings = await prisma.settings.findFirst();
