@@ -1563,7 +1563,7 @@ router.post('/deposit', authenticate, async (req, res) => {
       if (oxapayNetwork === 'bitcoin') oxapayNetwork = 'btc';
       if (oxapayNetwork === 'litecoin') oxapayNetwork = 'ltc';
 
-      const BACKEND_URL = process.env.BACKEND_URL || "https://api.mykryptexapp.com";
+      const BACKEND_URL = process.env.BACKEND_URL || "https://api.tradefluxbot.com";
 
       try {
         const chargePercent = Number(settings?.deposit_charge || 0);
@@ -1579,7 +1579,7 @@ router.post('/deposit', authenticate, async (req, res) => {
             network: oxapayNetwork,
             feePaidByPayer: 0,
             callbackUrl: `${BACKEND_URL}/users/oxapay-webhook`,
-            description: `${settings?.site_name || "Kryptex Mining"} Deposit - ${cryptoOption.symbol.toUpperCase()} ${cryptoOption.network}`,
+            description: `${settings?.site_name || "TradeFluxBot"} Deposit - ${cryptoOption.symbol.toUpperCase()} ${cryptoOption.network}`,
           }),
         });
 

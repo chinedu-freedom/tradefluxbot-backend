@@ -20,7 +20,7 @@ app.use(express.urlencoded({ limit: '50mb', extended: true }));
 app.use('/api', apiRoutes);
 
 app.get('/', (req, res) => {
-  res.json({ message: 'Kryptex Mining Backend is running!' });
+  res.json({ message: 'TradeFluxBot Backend is running!' });
 });
 
 app.listen(port, () => {

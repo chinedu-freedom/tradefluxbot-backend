@@ -1,4 +1,4 @@
-export function emailTemplate(content, siteName = "Kryptex Mining") {
+export function emailTemplate(content, siteName = "TradeFluxBot") {
   return `
     <!DOCTYPE html>
     <html lang="en">
@@ -6,14 +6,14 @@ export function emailTemplate(content, siteName = "Kryptex Mining") {
       <meta charset="UTF-8">
       <meta name="viewport" content="width=device-width, initial-scale=1.0">
     </head>
-    <body style="margin:0; padding:0; background-color:#f8f9fa; font-family:'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
+    <body style="margin:0; padding:0; background-color:#f8f9fa; font-family:'Proxima Nova', -apple-system, BlinkMacSystemFont, 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;">
       <table width="100%" border="0" cellspacing="0" cellpadding="0" style="background-color:#f8f9fa; padding:40px 0;">
          <tr>
           <td align="center">
             <table width="600" border="0" cellspacing="0" cellpadding="0" style="background-color:#ffffff; border-radius:12px; overflow:hidden; box-shadow:0 4px 16px rgba(0,0,0,0.04);">
               <!-- Header -->
               <tr>
-                <td style="background-color:#d97706; padding:30px 40px; text-align:center;">
+                <td style="background-color:#0073b6; padding:30px 40px; text-align:center;">
                   <h1 style="color:#ffffff; margin:0; font-size:28px; letter-spacing:1px;">${siteName}</h1>
                 </td>
               </tr>

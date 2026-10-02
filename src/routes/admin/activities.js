@@ -78,7 +78,7 @@ router.get('/', async (req, res) => {
         take: limitNum,
         include: {
           user: {
-            select: { id: true, email: true, username: true, full_name: true }
+            select: { id: true, email: true, username: true, full_name: true, profile_image: true }
           }
         }
       }),

@@ -3,7 +3,11 @@
 
 # local env files
 .env
+.env*.local
 .env.local
+.env.development
+.env.production
+!.env.example
 src/lib/security-config.json
 
 # IDEs and editors
@@ -14,8 +18,14 @@ src/lib/security-config.json
 *.njsproj
 *.sln
 *.sw?
+.DS_Store
+Thumbs.db
 
 # debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
+pnpm-debug.log*
+
+# system & temp
+*.log

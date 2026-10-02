@@ -98,8 +98,8 @@ router.get('/platform', async (req, res) => {
     if (!settings) {
       settings = await prisma.settings.create({
         data: {
-          site_name: "Kryptex Mining",
-          site_title: "Kryptex Mining",
+          site_name: "TradeFluxBot",
+          site_title: "TradeFluxBot",
           currency_name: "USD",
           currency_symbol: "$",
           timezone: "UTC",

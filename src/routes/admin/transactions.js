@@ -10,7 +10,7 @@ const prisma = new PrismaClient();
 router.get('/deposits', async (req, res) => {
   try {
     const deposits = await prisma.deposits.findMany({
-      include: { user: { select: { email: true, full_name: true } } },
+      include: { user: { select: { id: true, email: true, full_name: true, profile_image: true } } },
       orderBy: { created_at: 'desc' }
     });
     res.json(deposits);
@@ -97,7 +97,7 @@ router.put('/deposits/:id/status', async (req, res) => {
 router.get('/withdrawals', async (req, res) => {
   try {
     const withdrawals = await prisma.withdrawals.findMany({
-      include: { user: { select: { email: true, full_name: true } } },
+      include: { user: { select: { id: true, email: true, full_name: true, profile_image: true } } },
       orderBy: { created_at: 'desc' }
     });
     res.json(withdrawals);

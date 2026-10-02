@@ -53,7 +53,7 @@ router.get('/gift-code-claims', async (req, res) => {
   try {
     const claims = await prisma.gift_code_claims.findMany({
       include: {
-        user: { select: { full_name: true, email: true } },
+        user: { select: { id: true, full_name: true, email: true, profile_image: true } },
         gift_code: { select: { code: true } }
       },
       orderBy: { claimed_at: 'desc' }
