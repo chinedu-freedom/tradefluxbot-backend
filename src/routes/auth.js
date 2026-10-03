@@ -30,13 +30,46 @@ router.post('/register', async (req, res) => {
       }
     }
 
-    if (!country_id) {
-      const defaultCountry = await prisma.countries.findFirst();
-      if (defaultCountry) country_id = defaultCountry.id;
+    if (country_id) {
+      const countryExists = await prisma.countries.findUnique({ where: { id: country_id } });
+      if (!countryExists) {
+        const defaultCountry = await prisma.countries.findFirst();
+        country_id = defaultCountry ? defaultCountry.id : null;
+      }
+    } else {
+      let defaultCountry = await prisma.countries.findFirst();
+      if (!defaultCountry) {
+        defaultCountry = await prisma.countries.create({
+          data: {
+            country_code: "US",
+            country_name: "United States",
+            currency_symbol: "$",
+            currency_code: "USD",
+            exchange_rate: 1.0,
+            auto_update: false,
+            status: true
+          }
+        });
+      }
+      country_id = defaultCountry.id;
     }
+
     if (!language_id) {
-      const defaultLanguage = await prisma.languages.findFirst();
-      if (defaultLanguage) language_id = defaultLanguage.id;
+      let defaultLanguage = await prisma.languages.findFirst({ where: { is_default: true } })
+        || await prisma.languages.findFirst();
+      if (!defaultLanguage) {
+        defaultLanguage = await prisma.languages.create({
+          data: {
+            language_code: "en",
+            language_name: "English",
+            native_name: "English",
+            text_direction: "ltr",
+            is_default: true,
+            status: true
+          }
+        });
+      }
+      language_id = defaultLanguage.id;
     }
 
     const password_hash = await bcrypt.hash(password, 10);
