@@ -88,7 +88,6 @@ const createCrudRoutes = (modelName) => {
 // Generic CRUD endpoints for settings tables
 router.use('/countries', createCrudRoutes('countries'));
 router.use('/languages', createCrudRoutes('languages'));
-router.use('/payout-cryptos', createCrudRoutes('payout_cryptocurrencies'));
 router.use('/market-assets', createCrudRoutes('market_assets'));
 
 // ----- Global Platform Settings -----
