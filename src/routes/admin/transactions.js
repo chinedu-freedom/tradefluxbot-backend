@@ -1,3 +1,4 @@
+import { distributeDepositReferralCommission } from '../../lib/referral.js';
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { sendDepositNotificationEmail, sendWithdrawalNotificationEmail } from '../../lib/mailer.js';
@@ -32,16 +33,16 @@ router.put('/deposits/:id/status', async (req, res) => {
     if (status === 'APPROVED') {
       const newBalance = Number(deposit.user.balance) + Number(deposit.amount);
       
-      const result = await prisma.$transaction([
-        prisma.deposits.update({
+      const result = await prisma.$transaction(async (tx) => {
+        const dep = await tx.deposits.update({
           where: { id: deposit.id },
           data: { status: 'APPROVED', approved_by: req.user.id, approved_at: new Date() }
-        }),
-        prisma.users.update({
+        });
+        await tx.users.update({
           where: { id: deposit.user_id },
           data: { balance: newBalance }
-        }),
-        prisma.transactions.create({
+        });
+        await tx.transactions.create({
           data: {
             user_id: deposit.user_id,
             type: 'DEPOSIT',
@@ -50,8 +51,8 @@ router.put('/deposits/:id/status', async (req, res) => {
             balance_after: newBalance,
             description: 'Deposit approved'
           }
-        }),
-        prisma.user_spins.upsert({
+        });
+        await tx.user_spins.upsert({
           where: { user_id: deposit.user_id },
           create: {
             user_id: deposit.user_id,
@@ -62,9 +63,15 @@ router.put('/deposits/:id/status', async (req, res) => {
           update: {
             free_spins_remaining: { increment: 1 }
           }
-        })
-      ]);
-      updatedDeposit = result[0];
+        });
+        // 5% direct referral commission to referrer on deposit
+        await distributeDepositReferralCommission(tx, {
+          userId: deposit.user_id,
+          depositAmount: Number(deposit.amount)
+        });
+        return dep;
+      });
+      updatedDeposit = result;
       await logActivity(deposit.user_id, 'deposit completed', req, { amount: deposit.amount, cryptocurrency: deposit.cryptocurrency });
     } else if (status === 'REJECTED') {
       updatedDeposit = await prisma.deposits.update({

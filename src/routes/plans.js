@@ -116,56 +116,7 @@ router.post('/invest', authenticate, async (req, res) => {
         }
       });
       
-      // Distribute referral commissions (up to 3 levels)
-      const settings = await tx.settings.findFirst();
-      if (settings) {
-        let currentUser = user;
-        const levels = [
-          { rate: Number(settings.level1_commission || 0) },
-          { rate: Number(settings.level2_commission || 0) },
-          { rate: Number(settings.level3_commission || 0) },
-          { rate: Number(settings.level4_commission || 0) }
-        ];
-
-        for (let i = 0; i < 4; i++) {
-          if (!currentUser.referred_by || levels[i].rate <= 0) break;
-          
-          const referrerId = currentUser.referred_by;
-          const referrer = await tx.users.findUnique({ where: { id: referrerId } });
-          
-          if (!referrer) break;
-          
-          const commissionAmount = investAmount * (levels[i].rate / 100);
-          const newReferrerBalance = Number(referrer.withdrawable_balance || 0) + commissionAmount;
-          
-          await tx.users.update({
-            where: { id: referrerId },
-            data: { withdrawable_balance: newReferrerBalance }
-          });
-          
-          await tx.referral_commissions.create({
-            data: {
-              user_id: referrerId,
-              from_user_id: userId,
-              amount: commissionAmount,
-              level: i + 1
-            }
-          });
-          
-          await tx.transactions.create({
-            data: {
-              user_id: referrerId,
-              type: 'REFERRAL_COMMISSION',
-              amount: commissionAmount,
-              balance_before: Number(referrer.withdrawable_balance || 0),
-              balance_after: newReferrerBalance,
-              description: `Level ${i + 1} referral commission from ${user.username || user.full_name}`
-            }
-          });
-          
-          currentUser = referrer;
-        }
-      }
+      // Referral commissions are now awarded on deposits, not plan investment
     });
 
     await logActivity(userId, 'package purchase', req, { planName: plan.name, amount: investAmount });

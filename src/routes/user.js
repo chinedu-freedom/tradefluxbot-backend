@@ -1,3 +1,4 @@
+import { distributeDepositReferralCommission } from '../lib/referral.js';
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticate } from '../middleware/auth.js';
@@ -1778,6 +1779,12 @@ router.post('/oxapay-webhook', async (req, res) => {
           update: {
             free_spins_remaining: { increment: 1 }
           }
+        });
+
+        // 5% direct referral commission to referrer on deposit
+        await distributeDepositReferralCommission(tx, {
+          userId: deposit.user_id,
+          depositAmount: creditAmount
         });
       });
 
