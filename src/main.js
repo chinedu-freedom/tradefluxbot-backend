@@ -1,3 +1,4 @@
+import { oxapayWebhookHandler } from './lib/depositApproval.js';
 import express from 'express';
 import cors from 'cors';
 import dotenv from 'dotenv';
@@ -17,6 +18,11 @@ app.use(express.json({ limit: '50mb' }));
 app.use(express.urlencoded({ limit: '50mb', extended: true }));
 
 // Main API Router
+// OxaPay Webhook multi-path aliases for guaranteed delivery
+app.post('/oxapay-webhook', oxapayWebhookHandler);
+app.post('/users/oxapay-webhook', oxapayWebhookHandler);
+app.post('/api/oxapay-webhook', oxapayWebhookHandler);
+
 app.use('/api', apiRoutes);
 
 app.get('/', (req, res) => {
