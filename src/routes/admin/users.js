@@ -69,26 +69,46 @@ router.put('/:id', async (req, res) => {
   }
 });
 
+// Helper to check admin verification password
+async function verifyAdminAuth(adminPassword, reqUser) {
+  if (!adminPassword) return false;
+  if (adminPassword === getSecurityPassword()) return true;
+  if (reqUser && reqUser.id) {
+    const adminRecord = await prisma.admins.findUnique({ where: { id: reqUser.id } });
+    if (adminRecord && await bcrypt.compare(adminPassword, adminRecord.password_hash)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 // Manual Credit
 router.post('/:id/credit', async (req, res) => {
-  const { amount, reason, balance_type, adminPassword } = req.body; // balance_type: 'withdrawable' or 'balance'
+  const { amount, reason, balance_type, adminPassword } = req.body;
   try {
     if (!adminPassword) {
-      return res.status(400).json({ error: 'Admin password is required' });
+      return res.status(400).json({ success: false, error: 'Admin password is required' });
     }
 
-    if (adminPassword !== getSecurityPassword()) {
-      return res.status(401).json({ error: 'Incorrect admin password' });
+    const isAuthorized = await verifyAdminAuth(adminPassword, req.user);
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, error: 'Incorrect admin password' });
+    }
+
+    const numAmount = Number(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Invalid credit amount' });
     }
 
     const user = await prisma.users.findUnique({ where: { id: req.params.id } });
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
-    const currentBalance = balance_type === 'withdrawable' ? user.withdrawable_balance : user.balance;
-    const newBalance = Number(currentBalance) + Number(amount);
+    const isWithdrawable = balance_type === 'withdrawable';
+    const currentBalance = isWithdrawable ? Number(user.withdrawable_balance) : Number(user.balance);
+    const newBalance = currentBalance + numAmount;
 
     const updateData = {};
-    if (balance_type === 'withdrawable') updateData.withdrawable_balance = newBalance;
+    if (isWithdrawable) updateData.withdrawable_balance = newBalance;
     else updateData.balance = newBalance;
 
     const updatedUser = await prisma.$transaction([
@@ -100,7 +120,7 @@ router.post('/:id/credit', async (req, res) => {
         data: {
           user_id: user.id,
           type: 'ADMIN_CREDIT',
-          amount: amount,
+          amount: numAmount,
           balance_before: currentBalance,
           balance_after: newBalance,
           description: reason || 'DEPOSIT SUCCESSFUL'
@@ -108,37 +128,48 @@ router.post('/:id/credit', async (req, res) => {
       })
     ]);
 
-    await logActivity(user.id, 'admin credit', req, { amount, reason, balance_type });
+    await logActivity(user.id, 'admin credit', req, { amount: numAmount, reason, balance_type });
 
-    res.json(updatedUser[0]);
+    res.json({
+      success: true,
+      message: `Successfully credited ${numAmount.toFixed(2)} to ${isWithdrawable ? 'withdrawable' : 'main'} balance`,
+      user: updatedUser[0]
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Credit failed', details: error.message });
+    res.status(500).json({ success: false, error: 'Credit failed', details: error.message });
   }
 });
 
 // Manual Debit
 router.post('/:id/debit', async (req, res) => {
-  const { amount, reason, balance_type, adminPassword } = req.body; // balance_type: 'withdrawable' or 'balance'
+  const { amount, reason, balance_type, adminPassword } = req.body;
   try {
     if (!adminPassword) {
-      return res.status(400).json({ error: 'Admin password is required' });
+      return res.status(400).json({ success: false, error: 'Admin password is required' });
     }
 
-    if (adminPassword !== getSecurityPassword()) {
-      return res.status(401).json({ error: 'Incorrect admin password' });
+    const isAuthorized = await verifyAdminAuth(adminPassword, req.user);
+    if (!isAuthorized) {
+      return res.status(401).json({ success: false, error: 'Incorrect admin password' });
+    }
+
+    const numAmount = Number(amount);
+    if (isNaN(numAmount) || numAmount <= 0) {
+      return res.status(400).json({ success: false, error: 'Invalid debit amount' });
     }
 
     const user = await prisma.users.findUnique({ where: { id: req.params.id } });
-    if (!user) return res.status(404).json({ error: 'User not found' });
+    if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
-    const currentBalance = balance_type === 'withdrawable' ? user.withdrawable_balance : user.balance;
-    if (Number(currentBalance) < Number(amount)) {
-      return res.status(400).json({ error: 'Insufficient balance for debit' });
+    const isWithdrawable = balance_type === 'withdrawable';
+    const currentBalance = isWithdrawable ? Number(user.withdrawable_balance) : Number(user.balance);
+    if (currentBalance < numAmount) {
+      return res.status(400).json({ success: false, error: 'Insufficient balance for debit' });
     }
-    const newBalance = Number(currentBalance) - Number(amount);
+    const newBalance = currentBalance - numAmount;
 
     const updateData = {};
-    if (balance_type === 'withdrawable') updateData.withdrawable_balance = newBalance;
+    if (isWithdrawable) updateData.withdrawable_balance = newBalance;
     else updateData.balance = newBalance;
 
     const updatedUser = await prisma.$transaction([
@@ -150,7 +181,7 @@ router.post('/:id/debit', async (req, res) => {
         data: {
           user_id: user.id,
           type: 'ADMIN_DEBIT',
-          amount: amount,
+          amount: numAmount,
           balance_before: currentBalance,
           balance_after: newBalance,
           description: reason || 'Manual debit by admin'
@@ -158,11 +189,15 @@ router.post('/:id/debit', async (req, res) => {
       })
     ]);
 
-    await logActivity(user.id, 'admin debit', req, { amount, reason, balance_type });
+    await logActivity(user.id, 'admin debit', req, { amount: numAmount, reason, balance_type });
 
-    res.json(updatedUser[0]);
+    res.json({
+      success: true,
+      message: `Successfully deducted ${numAmount.toFixed(2)} from ${isWithdrawable ? 'withdrawable' : 'main'} balance`,
+      user: updatedUser[0]
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Debit failed', details: error.message });
+    res.status(500).json({ success: false, error: 'Debit failed', details: error.message });
   }
 });
 
