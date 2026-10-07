@@ -24,6 +24,7 @@ app.post('/users/oxapay-webhook', oxapayWebhookHandler);
 app.post('/api/oxapay-webhook', oxapayWebhookHandler);
 
 app.use('/api', apiRoutes);
+app.use('/', apiRoutes);
 
 app.get('/', (req, res) => {
   res.json({ message: 'TradeFluxBot Backend is running!' });
