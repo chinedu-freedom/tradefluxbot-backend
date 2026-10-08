@@ -49,6 +49,7 @@ router.put('/deposits/:id/status', async (req, res) => {
             amount: deposit.amount,
             balance_before: deposit.user.balance,
             balance_after: newBalance,
+            reference_id: deposit.id,
             description: 'Deposit approved'
           }
         });

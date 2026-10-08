@@ -182,56 +182,104 @@ router.get('/transactions', authenticate, async (req, res) => {
       orderBy: { created_at: 'desc' }
     });
 
-    const nonApprovedDeposits = await prisma.deposits.findMany({
-      where: { user_id: req.user.id, status: { not: 'approved' } },
-      orderBy: { created_at: 'desc' }
-    });
-
-    const nonApprovedWithdrawals = await prisma.withdrawals.findMany({
-      where: { user_id: req.user.id, status: { notIn: ['approved', 'processed', 'completed', 'success'] } },
-      orderBy: { created_at: 'desc' }
-    });
-
     // Fetch user withdrawals to map reference_id to wallet_address for withdrawal transactions
     const userWithdrawals = await prisma.withdrawals.findMany({
       where: { user_id: req.user.id }
     });
-
     const withdrawalMap = {};
     userWithdrawals.forEach(w => {
       withdrawalMap[w.id] = w.wallet_address;
     });
 
+    // Fetch user deposits to map reference_id or match details
+    const userDeposits = await prisma.deposits.findMany({
+      where: { user_id: req.user.id }
+    });
+    const depositMap = {};
+    userDeposits.forEach(d => {
+      depositMap[d.id] = d;
+    });
+
+    // Collect IDs of deposits that already have a transaction recorded
+    const completedDepositIds = new Set();
+    rawTransactions.forEach(t => {
+      if (t.type === 'DEPOSIT' && t.reference_id) {
+        completedDepositIds.add(t.reference_id);
+      }
+    });
+
+    // Any deposit with status APPROVED / COMPLETED / SUCCESS is already accounted for
+    userDeposits.forEach(d => {
+      const statusUpper = (d.status || '').toUpperCase();
+      if (['APPROVED', 'COMPLETED', 'SUCCESS'].includes(statusUpper)) {
+        completedDepositIds.add(d.id);
+      }
+    });
+
+    // Only include deposits that are strictly still pending/initiated (ONE card per deposit)
+    const nonApprovedDeposits = userDeposits.filter(d => {
+      const statusUpper = (d.status || '').toUpperCase();
+      const isPending = ['INITIATED', 'PENDING', 'WAITING', 'CONFIRMING'].includes(statusUpper);
+      return isPending && !completedDepositIds.has(d.id);
+    });
+
+    // Collect IDs of withdrawals that already have a transaction recorded
+    const completedWithdrawalIds = new Set();
+    rawTransactions.forEach(t => {
+      if (t.type === 'WITHDRAWAL' && t.reference_id) {
+        completedWithdrawalIds.add(t.reference_id);
+      }
+    });
+    userWithdrawals.forEach(w => {
+      const statusUpper = (w.status || '').toUpperCase();
+      if (['APPROVED', 'PROCESSED', 'COMPLETED', 'SUCCESS'].includes(statusUpper)) {
+        completedWithdrawalIds.add(w.id);
+      }
+    });
+
+    const nonApprovedWithdrawals = userWithdrawals.filter(w => {
+      const statusUpper = (w.status || '').toUpperCase();
+      const isPending = ['PENDING', 'WAITING', 'PROCESSING'].includes(statusUpper);
+      return isPending && !completedWithdrawalIds.has(w.id);
+    });
+
     const mappedTransactions = rawTransactions.map(t => {
       const isWithdrawal = t.type === 'WITHDRAWAL';
+      const isDeposit = t.type === 'DEPOSIT';
+      const matchedDeposit = t.reference_id ? depositMap[t.reference_id] : null;
+
       return {
         ...t,
         status: 'SUCCESS',
-        wallet_address: (isWithdrawal && t.reference_id) ? withdrawalMap[t.reference_id] : undefined
+        wallet_address: (isWithdrawal && t.reference_id) ? withdrawalMap[t.reference_id] : undefined,
+        // Preserve original deposit timestamp so the card doesn't jump times
+        created_at: matchedDeposit ? matchedDeposit.created_at : t.created_at,
+        cryptocurrency: matchedDeposit ? matchedDeposit.cryptocurrency : undefined
       };
     });
 
     const mappedDeposits = nonApprovedDeposits.map(d => ({
       id: d.id,
       user_id: d.user_id,
-      type: 'deposit',
+      type: 'DEPOSIT',
       amount: d.amount,
       balance_before: 0,
       balance_after: d.amount,
       description: `Deposit via ${d.cryptocurrency || 'Crypto'}`,
-      status: d.status ? d.status.toUpperCase() : 'PENDING',
-      created_at: d.created_at
+      status: 'PENDING',
+      created_at: d.created_at,
+      cryptocurrency: d.cryptocurrency
     }));
 
     const mappedWithdrawals = nonApprovedWithdrawals.map(w => ({
       id: w.id,
       user_id: w.user_id,
-      type: 'withdrawal',
+      type: 'WITHDRAWAL',
       amount: w.amount,
       balance_before: w.amount,
       balance_after: 0,
-      description: `Withdrawal via ${w.withdrawal_method}`,
-      status: w.status ? w.status.toUpperCase() : 'PENDING',
+      description: `Withdrawal via ${w.withdrawal_method || 'Crypto'}`,
+      status: 'PENDING',
       created_at: w.created_at,
       wallet_address: w.wallet_address
     }));
@@ -246,7 +294,6 @@ router.get('/transactions', authenticate, async (req, res) => {
   }
 });
 
-// Update user language
 router.put('/me/language', authenticate, async (req, res) => {
   try {
     const { language_code } = req.body;

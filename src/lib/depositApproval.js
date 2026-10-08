@@ -45,6 +45,7 @@ export async function processApprovedDeposit(deposit, { paidAmount, txID, curren
           amount: creditAmount,
           balance_before: balanceBefore,
           balance_after: balanceAfter,
+          reference_id: currentDep.id,
           description: `Deposit of ${creditAmount} (${currentDep.cryptocurrency || currency || 'Crypto'})`
         }
       });
