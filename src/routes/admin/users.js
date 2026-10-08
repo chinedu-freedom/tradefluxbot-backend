@@ -45,27 +45,128 @@ router.get('/:id', async (req, res) => {
 // Update user settings/permissions
 router.put('/:id', async (req, res) => {
   try {
-    const data = { ...req.body };
-    const plainPassword = data.new_password || data.password;
-    if (plainPassword) {
-      data.password_hash = await bcrypt.hash(plainPassword, 10);
-    }
-    delete data.new_password;
-    delete data.password;
+    const rawData = { ...req.body };
+    const userId = req.params.id;
 
-    const user = await prisma.users.update({
-      where: { id: req.params.id },
-      data: data
+    // Check if user exists
+    const existingUser = await prisma.users.findUnique({
+      where: { id: userId }
     });
 
-    if (data.is_active !== undefined) {
-      const action = data.is_active ? 'user unbanned' : 'user banned';
+    if (!existingUser) {
+      return res.status(404).json({ success: false, error: 'User not found' });
+    }
+
+    const dataToUpdate = {};
+
+    // 1. Full name
+    if (rawData.full_name !== undefined && typeof rawData.full_name === 'string') {
+      dataToUpdate.full_name = rawData.full_name.trim();
+    }
+
+    // 2. Username
+    if (rawData.username !== undefined) {
+      const usernameTrimmed = typeof rawData.username === 'string' ? rawData.username.trim() : null;
+      if (usernameTrimmed && usernameTrimmed !== existingUser.username) {
+        const userWithUsername = await prisma.users.findFirst({
+          where: { username: usernameTrimmed, id: { not: userId } }
+        });
+        if (userWithUsername) {
+          return res.status(400).json({ success: false, error: 'Username is already taken by another account' });
+        }
+        dataToUpdate.username = usernameTrimmed;
+      }
+    }
+
+    // 3. Email
+    if (rawData.email !== undefined && typeof rawData.email === 'string') {
+      const emailTrimmed = rawData.email.trim();
+      if (emailTrimmed && emailTrimmed !== existingUser.email) {
+        const userWithEmail = await prisma.users.findFirst({
+          where: { email: emailTrimmed, id: { not: userId } }
+        });
+        if (userWithEmail) {
+          return res.status(400).json({ success: false, error: 'Email is already registered to another account' });
+        }
+        dataToUpdate.email = emailTrimmed;
+      }
+    }
+
+    // 4. Password reset / update
+    const plainPassword = (rawData.new_password || rawData.password || '').toString().trim();
+    let passwordUpdated = false;
+    if (plainPassword && plainPassword.length > 0) {
+      dataToUpdate.password_hash = await bcrypt.hash(plainPassword, 10);
+      passwordUpdated = true;
+    }
+
+    // 5. Country ID (Validate UUID and foreign key existence)
+    if (rawData.country_id && rawData.country_id !== 'none' && rawData.country_id !== '') {
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (uuidRegex.test(rawData.country_id)) {
+        const countryExists = await prisma.countries.findUnique({
+          where: { id: rawData.country_id }
+        });
+        if (countryExists) {
+          dataToUpdate.country_id = rawData.country_id;
+        }
+      }
+    }
+
+    // 6. Profile image
+    if (rawData.profile_image !== undefined) {
+      dataToUpdate.profile_image = rawData.profile_image || null;
+    }
+
+    // 7. Boolean flags & permissions
+    if (rawData.is_active !== undefined) {
+      dataToUpdate.is_active = Boolean(rawData.is_active);
+    }
+    if (rawData.can_deposit !== undefined) {
+      dataToUpdate.can_deposit = Boolean(rawData.can_deposit);
+    }
+    if (rawData.can_withdraw !== undefined) {
+      dataToUpdate.can_withdraw = Boolean(rawData.can_withdraw);
+    }
+    if (rawData.can_earn_daily !== undefined) {
+      dataToUpdate.can_earn_daily = Boolean(rawData.can_earn_daily);
+    }
+    if (rawData.can_earn_referral !== undefined) {
+      dataToUpdate.can_earn_referral = Boolean(rawData.can_earn_referral);
+    }
+    if (rawData.can_access_spin !== undefined) {
+      dataToUpdate.can_access_spin = Boolean(rawData.can_access_spin);
+    }
+    if (rawData.can_access_checkin !== undefined) {
+      dataToUpdate.can_access_checkin = Boolean(rawData.can_access_checkin);
+    }
+
+    // Perform update
+    const user = await prisma.users.update({
+      where: { id: userId },
+      data: dataToUpdate,
+      include: {
+        country: true
+      }
+    });
+
+    if (rawData.is_active !== undefined && rawData.is_active !== existingUser.is_active) {
+      const action = rawData.is_active ? 'user unbanned' : 'user banned';
       await logActivity(user.id, action, req);
     }
 
-    res.json(user);
+    if (passwordUpdated) {
+      await logActivity(user.id, 'password reset by admin', req);
+    }
+
+    res.json({
+      success: true,
+      message: passwordUpdated ? 'Password and customer profile updated successfully' : 'Customer profile updated successfully',
+      user
+    });
   } catch (error) {
-    res.status(500).json({ error: 'Failed to update user' });
+    console.error('Failed to update user:', error);
+    res.status(500).json({ success: false, error: error.message || 'Failed to update user' });
   }
 });
 
