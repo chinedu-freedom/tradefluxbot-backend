@@ -493,3 +493,119 @@ export async function sendPaymentPinOtpEmail({ email, name, code }) {
 }
 
 
+
+
+export async function sendNewReferralNotificationEmail({
+  referrerEmail,
+  referrerName,
+  newUserName,
+  newUserUsername,
+  newUserEmail
+}) {
+  const siteName = await getSiteName();
+  const subject = `Great News! A New Member Joined Using Your Referral Link - ${siteName}`;
+
+  // Partially mask email for privacy (e.g. j***e@gmail.com)
+  let displayEmail = "";
+  if (newUserEmail && newUserEmail.includes("@")) {
+    const [localPart, domain] = newUserEmail.split("@");
+    if (localPart.length > 2) {
+      displayEmail = `${localPart[0]}***${localPart[localPart.length - 1]}@${domain}`;
+    } else {
+      displayEmail = `${localPart[0]}***@${domain}`;
+    }
+  }
+
+  const referralIdentifier = newUserUsername 
+    ? `@${newUserUsername}` 
+    : (newUserName || "A new member");
+
+  const content = `
+    <div style="padding:10px 0;">
+      <div style="text-align:center; margin-bottom:25px;">
+        <div style="display:inline-block; background-color:#e0f2fe; color:#0073b6; width:64px; height:64px; line-height:64px; border-radius:50%; font-size:30px; margin-bottom:15px;">
+          🎉
+        </div>
+        <h2 style="color:#0f172a; margin:0 0 10px 0; font-size:24px; font-weight:800;">
+          New Referral Joined Your Team!
+        </h2>
+        <p style="color:#64748b; font-size:15px; margin:0;">
+          Congratulations! Your referral network is growing.
+        </p>
+      </div>
+
+      <p style="color:#334155; font-size:16px; line-height:1.6; margin-bottom:20px;">
+        Hello <strong>${referrerName || "Valued Partner"}</strong>,
+      </p>
+
+      <p style="color:#475569; font-size:15px; line-height:1.7; margin-bottom:25px;">
+        We are excited to let you know that <strong>${newUserName || referralIdentifier}</strong> just registered on <strong>${siteName}</strong> using your personal referral link!
+      </p>
+
+      <!-- Referral Details Card -->
+      <div style="background-color:#f8fafc; border:1px solid #e2e8f0; border-radius:10px; padding:20px; margin:25px 0;">
+        <h4 style="color:#0f172a; margin:0 0 15px 0; font-size:14px; text-transform:uppercase; letter-spacing:0.5px; border-bottom:1px solid #e2e8f0; padding-bottom:8px;">
+          New Member Details
+        </h4>
+        <table width="100%" cellpadding="6" cellspacing="0" style="font-size:14px; color:#334155;">
+          <tr>
+            <td width="35%" style="color:#64748b;">Full Name:</td>
+            <td width="65%"><strong>${newUserName}</strong></td>
+          </tr>
+          ${newUserUsername ? `
+          <tr>
+            <td style="color:#64748b;">Username:</td>
+            <td><strong>@${newUserUsername}</strong></td>
+          </tr>
+          ` : ''}
+          ${displayEmail ? `
+          <tr>
+            <td style="color:#64748b;">Email:</td>
+            <td><span style="font-family:monospace; color:#475569;">${displayEmail}</span></td>
+          </tr>
+          ` : ''}
+          <tr>
+            <td style="color:#64748b;">Tier / Level:</td>
+            <td><strong style="color:#0073b6;">Level 1 (Direct Downline)</strong></td>
+          </tr>
+          <tr>
+            <td style="color:#64748b;">Registration Time:</td>
+            <td>${new Date().toUTCString()}</td>
+          </tr>
+        </table>
+      </div>
+
+      <!-- Commission Info Box -->
+      <div style="background-color:#ecfdf5; border:1px solid #a7f3d0; border-radius:10px; padding:20px; margin:25px 0;">
+        <h4 style="color:#065f46; margin:0 0 8px 0; font-size:15px; font-weight:bold;">
+          💰 Earn Instant Referral Commissions
+        </h4>
+        <p style="color:#047857; font-size:14px; line-height:1.6; margin:0;">
+          Whenever this member makes a deposit and activates computing power or staking plans, you will automatically receive <strong>referral commissions</strong> credited straight to your <strong>withdrawable balance</strong>!
+        </p>
+      </div>
+
+      <div style="text-align:center; margin:35px 0 20px 0;">
+        <a href="https://tradefluxbot.com/user/referrals" 
+           style="background-color:#0073b6; color:#ffffff; padding:14px 32px; border-radius:8px; font-size:15px; font-weight:bold; text-decoration:none; display:inline-block; box-shadow:0 2px 8px rgba(0,115,182,0.3);">
+          View Your Referral Team
+        </a>
+      </div>
+
+      <p style="color:#64748b; font-size:13px; line-height:1.6; text-align:center; margin-top:30px;">
+        Keep sharing your referral link with friends and partners to unlock higher tier bonuses and passive earnings!
+      </p>
+
+      <p style="margin-top:25px; font-weight:700; color:#0f172a; text-align:center;">
+        Best Regards,<br>
+        <span style="color:#0073b6;">The ${siteName} Team</span>
+      </p>
+    </div>
+  `;
+
+  return await sendEmail({
+    to: referrerEmail,
+    subject,
+    html: emailTemplate(content, siteName)
+  });
+}

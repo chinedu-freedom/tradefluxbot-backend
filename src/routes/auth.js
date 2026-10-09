@@ -2,7 +2,7 @@ import { Router } from 'express';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { PrismaClient } from '@prisma/client';
-import { sendWelcomeEmail, sendPasswordResetEmail, sendPasswordResetConfirmationEmail } from '../lib/mailer.js';
+import { sendWelcomeEmail, sendPasswordResetEmail, sendPasswordResetConfirmationEmail, sendNewReferralNotificationEmail } from '../lib/mailer.js';
 import { logActivity } from '../lib/logger.js';
 
 const router = Router();
@@ -79,8 +79,9 @@ router.post('/register', async (req, res) => {
     const referral_code = `${prefix}${Math.floor(1000 + Math.random() * 9000)}`;
 
     let referred_by_id = null;
+    let referrer = null;
     if (referred_by_code) {
-      const referrer = await prisma.users.findUnique({ where: { referral_code: referred_by_code } });
+      referrer = await prisma.users.findUnique({ where: { referral_code: referred_by_code } });
       if (referrer) {
         referred_by_id = referrer.id;
       }
@@ -135,6 +136,22 @@ router.post('/register', async (req, res) => {
       await sendWelcomeEmail({ email: user.email, name: user.full_name });
     } catch (err) {
       console.error("Failed to send welcome email:", err);
+    }
+
+    // Send Notification Email to the referrer (link owner)
+    if (referrer && referrer.email) {
+      try {
+        await sendNewReferralNotificationEmail({
+          referrerEmail: referrer.email,
+          referrerName: referrer.full_name || referrer.username,
+          newUserName: user.full_name,
+          newUserUsername: user.username,
+          newUserEmail: user.email
+        });
+        console.log(`[REFERRAL] Sent new referral notification email to referrer ${referrer.email} for new signup ${user.email}`);
+      } catch (refEmailErr) {
+        console.error("Failed to send new referral notification email to referrer:", refEmailErr);
+      }
     }
 
     res.status(201).json({
