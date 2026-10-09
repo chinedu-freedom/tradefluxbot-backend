@@ -23,24 +23,195 @@ router.get('/', async (req, res) => {
 });
 
 
-// Get user details
+// Get user details (including Upliner and Downliners)
 router.get('/:id', async (req, res) => {
   try {
     const user = await prisma.users.findUnique({
       where: { id: req.params.id },
       include: {
         country: true,
-        transactions: { orderBy: { created_at: 'desc' }, take: 10 },
-        investments: true
+        referrer: {
+          include: {
+            country: true
+          }
+        },
+        transactions: { orderBy: { created_at: 'desc' }, take: 25 },
+        investments: { orderBy: { created_at: 'desc' } }
       }
     });
+
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
-    res.json({ success: true, data: user });
+
+    // 1. Calculate Upliner details and commissions paid to upliner by this user
+    let upliner = null;
+    if (user.referrer) {
+      const uplinerCommissions = await prisma.referral_commissions.findMany({
+        where: {
+          user_id: user.referrer.id,
+          from_user_id: user.id
+        }
+      });
+      const uplinerCommissionTotal = uplinerCommissions.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+
+      upliner = {
+        id: user.referrer.id,
+        full_name: user.referrer.full_name,
+        username: user.referrer.username,
+        email: user.referrer.email,
+        profile_image: user.referrer.profile_image,
+        referral_code: user.referrer.referral_code,
+        country: user.referrer.country?.country_name || 'N/A',
+        created_at: user.referrer.created_at,
+        balance: Number(user.referrer.balance || 0),
+        withdrawable_balance: Number(user.referrer.withdrawable_balance || 0),
+        is_active: user.referrer.is_active,
+        total_commission_from_user: uplinerCommissionTotal
+      };
+    }
+
+    // 2. Fetch direct downliners (Level 1)
+    const level1Users = await prisma.users.findMany({
+      where: { referred_by: user.id },
+      include: {
+        country: true,
+        deposits: {
+          where: { status: 'COMPLETED' },
+          select: { amount: true }
+        },
+        investments: {
+          select: { amount: true, status: true }
+        },
+        _count: {
+          select: { referrals: true }
+        }
+      },
+      orderBy: { created_at: 'desc' }
+    });
+
+    // 3. Fetch Level 2 downliners
+    const level1Ids = level1Users.map(u => u.id);
+    let level2Users = [];
+    if (level1Ids.length > 0) {
+      level2Users = await prisma.users.findMany({
+        where: { referred_by: { in: level1Ids } },
+        include: {
+          country: true,
+          referrer: {
+            select: { id: true, full_name: true, username: true, email: true }
+          },
+          deposits: {
+            where: { status: 'COMPLETED' },
+            select: { amount: true }
+          },
+          investments: {
+            select: { amount: true, status: true }
+          }
+        },
+        orderBy: { created_at: 'desc' }
+      });
+    }
+
+    // 4. Fetch commissions earned by this user
+    const earnedCommissions = await prisma.referral_commissions.findMany({
+      where: { user_id: user.id },
+      include: {
+        giver: {
+          select: { id: true, full_name: true, username: true, email: true }
+        }
+      },
+      orderBy: { created_at: 'desc' }
+    });
+
+    const totalCommissionEarned = earnedCommissions.reduce((sum, c) => sum + Number(c.amount || 0), 0);
+
+    // Format downliners
+    const formattedLevel1 = level1Users.map(l1 => {
+      const totalDeposited = l1.deposits.reduce((acc, d) => acc + Number(d.amount || 0), 0);
+      const totalInvested = l1.investments.reduce((acc, inv) => acc + Number(inv.amount || 0), 0);
+      const commissionFromThisUser = earnedCommissions
+        .filter(c => c.from_user_id === l1.id)
+        .reduce((acc, c) => acc + Number(c.amount || 0), 0);
+
+      return {
+        id: l1.id,
+        full_name: l1.full_name,
+        username: l1.username,
+        email: l1.email,
+        profile_image: l1.profile_image,
+        referral_code: l1.referral_code,
+        country: l1.country?.country_name || 'N/A',
+        created_at: l1.created_at,
+        is_active: l1.is_active,
+        balance: Number(l1.balance || 0),
+        withdrawable_balance: Number(l1.withdrawable_balance || 0),
+        total_deposited: totalDeposited,
+        total_invested: totalInvested,
+        commission_generated: commissionFromThisUser,
+        sub_referrals_count: l1._count?.referrals || 0,
+        level: 1
+      };
+    });
+
+    const formattedLevel2 = level2Users.map(l2 => {
+      const totalDeposited = l2.deposits.reduce((acc, d) => acc + Number(d.amount || 0), 0);
+      const totalInvested = l2.investments.reduce((acc, inv) => acc + Number(inv.amount || 0), 0);
+      const commissionFromThisUser = earnedCommissions
+        .filter(c => c.from_user_id === l2.id)
+        .reduce((acc, c) => acc + Number(c.amount || 0), 0);
+
+      return {
+        id: l2.id,
+        full_name: l2.full_name,
+        username: l2.username,
+        email: l2.email,
+        profile_image: l2.profile_image,
+        referral_code: l2.referral_code,
+        country: l2.country?.country_name || 'N/A',
+        created_at: l2.created_at,
+        is_active: l2.is_active,
+        balance: Number(l2.balance || 0),
+        withdrawable_balance: Number(l2.withdrawable_balance || 0),
+        total_deposited: totalDeposited,
+        total_invested: totalInvested,
+        commission_generated: commissionFromThisUser,
+        referred_by_user: l2.referrer ? {
+          id: l2.referrer.id,
+          name: l2.referrer.full_name || l2.referrer.username
+        } : null,
+        level: 2
+      };
+    });
+
+    // Merge everything into response
+    const userResponse = {
+      ...user,
+      upliner,
+      downliners_summary: {
+        total_team_count: formattedLevel1.length + formattedLevel2.length,
+        level1_count: formattedLevel1.length,
+        level2_count: formattedLevel2.length,
+        total_commission_earned: totalCommissionEarned
+      },
+      downliners: [...formattedLevel1, ...formattedLevel2],
+      referral_commissions: earnedCommissions.map(c => ({
+        id: c.id,
+        amount: Number(c.amount || 0),
+        level: c.level,
+        created_at: c.created_at,
+        from_user: c.giver ? {
+          id: c.giver.id,
+          name: c.giver.full_name || c.giver.username,
+          email: c.giver.email
+        } : null
+      }))
+    };
+
+    res.json({ success: true, data: userResponse });
   } catch (error) {
-    res.status(500).json({ success: false, error: 'Failed to fetch user' });
+    console.error('Failed to fetch user details:', error);
+    res.status(500).json({ success: false, error: 'Failed to fetch user', details: error.message });
   }
 });
-
 
 // Update user settings/permissions
 router.put('/:id', async (req, res) => {
