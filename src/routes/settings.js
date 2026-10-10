@@ -39,41 +39,38 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Fixed Supported Cryptocurrencies (Matches Stakelab exactly: Tether TRC20, Tether BEP20, Bitcoin, Litecoin)
+// Fixed Supported Cryptocurrencies (Tether TRC20, Tether BEP20, Ethereum BEP20, Litecoin)
 export const FIXED_CRYPTOS = [
   { name: "Tether (TRC20)", symbol: "USDT", network: "TRC20", network_name: "Tron Network (TRC20)", icon: "https://assets.coingecko.com/coins/images/325/large/Tether.png", sort_order: 1, status: true },
   { name: "Tether (BEP20)", symbol: "USDT", network: "BEP20", network_name: "BNB Smart Chain (BEP20)", icon: "https://assets.coingecko.com/coins/images/325/large/Tether.png", sort_order: 2, status: true },
-  { name: "Bitcoin", symbol: "BTC", network: "Bitcoin", network_name: "Bitcoin Network", icon: "https://assets.coingecko.com/coins/images/1/large/bitcoin.png", sort_order: 3, status: true },
+  { name: "Ethereum (BEP20)", symbol: "ETH", network: "BEP20", network_name: "BNB Smart Chain (BEP20)", icon: "https://assets.coingecko.com/coins/images/279/large/ethereum.png", sort_order: 3, status: true },
   { name: "Litecoin", symbol: "LTC", network: "Litecoin", network_name: "Litecoin Network", icon: "https://assets.coingecko.com/coins/images/2/large/litecoin.png", sort_order: 4, status: true }
 ];
 
 // Get active payout cryptocurrencies for deposit options
 router.get("/payout-cryptos", async (req, res) => {
   try {
-    let cryptos = await prisma.payout_cryptocurrencies.findMany({
+    for (const c of FIXED_CRYPTOS) {
+      await prisma.payout_cryptocurrencies.upsert({
+        where: { symbol_network: { symbol: c.symbol, network: c.network } },
+        update: c,
+        create: c
+      });
+    }
+
+    // Deactivate BTC so it is no longer shown
+    await prisma.payout_cryptocurrencies.updateMany({
+      where: { symbol: "BTC" },
+      data: { status: false }
+    });
+
+    const cryptos = await prisma.payout_cryptocurrencies.findMany({
       where: {
         status: true,
-        symbol: { in: ["USDT", "BTC", "LTC"] }
+        symbol: { in: ["USDT", "ETH", "LTC"] }
       },
       orderBy: { sort_order: "asc" }
     });
-
-    if (!cryptos || cryptos.length === 0) {
-      for (const c of FIXED_CRYPTOS) {
-        await prisma.payout_cryptocurrencies.upsert({
-          where: { symbol_network: { symbol: c.symbol, network: c.network } },
-          update: c,
-          create: c
-        });
-      }
-      cryptos = await prisma.payout_cryptocurrencies.findMany({
-        where: {
-          status: true,
-          symbol: { in: ["USDT", "BTC", "LTC"] }
-        },
-        orderBy: { sort_order: "asc" }
-      });
-    }
 
     res.json({ success: true, data: cryptos });
   } catch (error) {

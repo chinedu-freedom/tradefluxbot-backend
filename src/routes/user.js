@@ -1611,6 +1611,7 @@ router.post('/deposit', authenticate, async (req, res) => {
       let oxapayNetwork = cryptoOption.network.toLowerCase();
       if (oxapayNetwork === 'bitcoin') oxapayNetwork = 'btc';
       if (oxapayNetwork === 'litecoin') oxapayNetwork = 'ltc';
+      if (oxapayNetwork === 'bep20' || oxapayNetwork === 'bsc') oxapayNetwork = 'bep20';
 
       const BACKEND_URL = process.env.BACKEND_URL || "https://tradefluxbot-backend-5gbk.onrender.com";
 
