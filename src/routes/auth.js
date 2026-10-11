@@ -249,15 +249,16 @@ router.post('/login', async (req, res) => {
 
 // Admin Login
 router.post('/admin/login', async (req, res) => {
-  const { email, password } = req.body;
+  const rawEmail = (req.body.email || '').toString().trim().toLowerCase();
+  const rawPassword = (req.body.password || '').toString().trim();
 
   try {
-    const admin = await prisma.admins.findUnique({ where: { email } });
+    const admin = await prisma.admins.findUnique({ where: { email: rawEmail } });
     if (!admin) {
       return res.status(401).json({ error: 'Invalid admin credentials' });
     }
 
-    const isValid = await bcrypt.compare(password, admin.password_hash);
+    const isValid = await bcrypt.compare(rawPassword, admin.password_hash);
     if (!isValid) {
       return res.status(401).json({ error: 'Invalid admin credentials' });
     }
