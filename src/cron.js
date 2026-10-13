@@ -84,7 +84,24 @@ export const runInvestmentCron = async () => {
                 balance_before: parseFloat(user.withdrawable_balance || 0),
                 balance_after: newBalance,
                 description: `Daily profit payout for ${inv.plan.name}`,
-                reference_id: inv.id
+                reference_id: inv.id,
+                created_at: precisePaidDate
+              }
+            });
+          } else {
+            // Fixed Deposit: profit is locked until maturity, but record a transaction so user sees daily drops in transactions & history
+            const user = await prisma.users.findUnique({ where: { id: inv.user_id } });
+            const currentWithdrawable = parseFloat(user?.withdrawable_balance || 0);
+            await prisma.transactions.create({
+              data: {
+                user_id: inv.user_id,
+                type: 'locked_profit',
+                amount: profitAmount,
+                balance_before: currentWithdrawable,
+                balance_after: currentWithdrawable,
+                description: `Daily profit for ${inv.plan.name} (Locked in contract)`,
+                reference_id: inv.id,
+                created_at: precisePaidDate
               }
             });
           }
@@ -215,9 +232,57 @@ export const runExchangeRateCron = async () => {
 };
 
 // Start the cron to run periodically
+
+export const syncMissingLockedTransactions = async () => {
+  try {
+    const fixedInvestments = await prisma.investments.findMany({
+      where: {
+        plan: { is_fixed_deposit: true },
+        status: { in: ['ACTIVE', 'active'] }
+      },
+      include: { plan: true, profits: true }
+    });
+
+    for (const inv of fixedInvestments) {
+      if (inv.profits && inv.profits.length > 0) {
+        for (const profit of inv.profits) {
+          const existingTx = await prisma.transactions.findFirst({
+            where: {
+              user_id: inv.user_id,
+              reference_id: inv.id,
+              created_at: profit.paid_date
+            }
+          });
+
+          if (!existingTx) {
+            const user = await prisma.users.findUnique({ where: { id: inv.user_id } });
+            const currentWithdrawable = parseFloat(user?.withdrawable_balance || 0);
+            await prisma.transactions.create({
+              data: {
+                user_id: inv.user_id,
+                type: 'locked_profit',
+                amount: parseFloat(profit.amount),
+                balance_before: currentWithdrawable,
+                balance_after: currentWithdrawable,
+                description: `Daily profit for ${inv.plan.name} (Locked in contract)`,
+                reference_id: inv.id,
+                created_at: profit.paid_date
+              }
+            });
+            console.log(`[SYNC] Retroactively created locked_profit tx for user ${inv.user_id}, amount ${profit.amount}`);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('Error syncing missing locked transactions:', err);
+  }
+};
+
 export const initCron = () => {
   console.log('Automated Investment Profit & Exchange Rate Crons Initialized...');
   // Run immediately on start
+  syncMissingLockedTransactions();
   runInvestmentCron();
   runExchangeRateCron();
   

@@ -74,6 +74,17 @@ router.get('/me', authenticate, async (req, res) => {
       }
     }
 
+    // Calculate locked profits from active fixed deposit contracts
+    const activeFixedInvestments = await prisma.investments.findMany({
+      where: {
+        user_id: req.user.id,
+        status: { in: ['ACTIVE', 'active'] },
+        plan: { is_fixed_deposit: true }
+      }
+    });
+    const lockedProfits = activeFixedInvestments.reduce((sum, inv) => sum + parseFloat(inv.total_paid || 0), 0);
+    const overallTotalIncome = totalIncome + lockedProfits;
+
     const teamMembersCount = await prisma.users.count({
       where: { referred_by: req.user.id }
     });
@@ -89,6 +100,7 @@ router.get('/me', authenticate, async (req, res) => {
         balance: user.balance,
         withdrawable_balance: user.withdrawable_balance,
         gift_balance: user.gift_balance,
+        locked_profits: lockedProfits,
         country: user.country,
         language: user.language,
         referral_code: user.referral_code,
@@ -98,7 +110,8 @@ router.get('/me', authenticate, async (req, res) => {
         statistics: {
           total_deposit: depositsAggr._sum.amount || 0,
           total_withdrawal: withdrawalsAggr._sum.amount || 0,
-          total_income: totalIncome,
+          total_income: overallTotalIncome,
+          locked_profits: lockedProfits,
           team_members: teamMembersCount
         }
       }
@@ -124,9 +137,13 @@ router.get('/me/investments', authenticate, async (req, res) => {
 
     let totalInvested = 0;
     let totalMonthlyEst = 0;
+    let totalLockedProfits = 0;
 
     for (const inv of activeInvestments) {
       totalInvested += Number(inv.amount) || 0;
+      if (inv.plan?.is_fixed_deposit) {
+        totalLockedProfits += Number(inv.total_paid) || 0;
+      }
       if (inv.plan && inv.plan.daily_income) {
         // Calculate total expected returns based on the actual plan duration in days
         const duration = Number(inv.plan.duration) || 30;
@@ -143,7 +160,8 @@ router.get('/me/investments', authenticate, async (req, res) => {
         stats: {
           total_invested: totalInvested,
           active_count: activeInvestments.length,
-          est_monthly: totalMonthlyEst
+          est_monthly: totalMonthlyEst,
+          total_locked_profits: totalLockedProfits
         }
       }
     });
