@@ -12,7 +12,7 @@ import {
   sendWithdrawalOtpEmail,
   sendPaymentPinOtpEmail
 } from '../lib/mailer.js';
-import { generateSecurityOtp, verifySecurityOtp } from '../lib/otpService.js';
+import { generateSecurityOtp, verifySecurityOtp, clearSecurityOtp } from '../lib/otpService.js';
 import { logActivity } from '../lib/logger.js';
 
 const router = Router();
@@ -1091,14 +1091,26 @@ router.post('/me/payment/send-otp', authenticate, async (req, res) => {
     });
 
     if (!emailRes?.success) {
-      clearSecurityOtp(req.user.id, 'PAYMENT_PASSWORD_RESET');
-      return res.status(500).json({ success: false, message: 'Failed to deliver verification code to your email. Please try again.' });
+      if (typeof clearSecurityOtp === 'function') {
+        clearSecurityOtp(req.user.id, 'PAYMENT_PASSWORD_RESET');
+      }
+      const errDetails = typeof emailRes?.error === 'object' ? JSON.stringify(emailRes?.error) : String(emailRes?.error || 'Email service error');
+      console.error('sendPaymentPinOtpEmail failed:', errDetails);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Failed to deliver verification code to your email. Please try again.',
+        error: errDetails
+      });
     }
 
     res.json({ success: true, message: `Verification code sent to ${user.email}` });
   } catch (error) {
     console.error('Send payment OTP error:', error);
-    res.status(500).json({ success: false, message: 'Failed to send verification code' });
+    res.status(500).json({ 
+      success: false, 
+      message: 'Failed to send verification code',
+      error: error.message 
+    });
   }
 });
 
