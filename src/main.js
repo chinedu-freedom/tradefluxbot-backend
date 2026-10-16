@@ -27,7 +27,7 @@ app.use('/api', apiRoutes);
 app.use('/', apiRoutes);
 
 app.get('/', (req, res) => {
-  res.json({ message: 'TradeFluxBot Backend is running!' });
+  res.json({ message: 'TradeFluxBot Backend is running!', version: '2.1.0' });
 });
 
 app.listen(port, () => {

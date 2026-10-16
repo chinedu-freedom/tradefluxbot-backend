@@ -1,19 +1,44 @@
 import axios from "axios";
 import { getZohoAccessToken } from "./zohoToken.js";
 
+let cachedZohoAccount = null;
+
+async function getZohoAccountInfo(accessToken) {
+  if (cachedZohoAccount) return cachedZohoAccount;
+  try {
+    const res = await axios.get("https://mail.zoho.com/api/accounts", {
+      headers: { Authorization: `Zoho-oauthtoken ${accessToken}` },
+      timeout: 10000
+    });
+    const acc = res.data?.data?.[0];
+    if (acc && acc.accountId) {
+      cachedZohoAccount = {
+        accountId: String(acc.accountId).trim(),
+        fromAddress: String(acc.primaryEmailAddress || acc.mailboxAddress || "info@tradefluxbot.com").trim().toLowerCase()
+      };
+      console.log(`[ZOHO] Discovered active account: ${cachedZohoAccount.accountId} (${cachedZohoAccount.fromAddress})`);
+      return cachedZohoAccount;
+    }
+  } catch (err) {
+    console.error("[ZOHO] Account lookup error:", err.response?.data || err.message);
+  }
+  return {
+    accountId: "8563946000000008002",
+    fromAddress: "info@tradefluxbot.com"
+  };
+}
+
 export async function sendEmail({ to, subject, html }) {
   try {
     const accessToken = await getZohoAccessToken();
-    const accountId = (process.env.ZOHO_MAIL_ACCOUNT_ID || "8563946000000008002").replace(/["']/g, "").trim();
-    // Zoho Mail API strictly requires the authenticated primary mailbox address: info@tradefluxbot.com
-    const fromAddress = "info@tradefluxbot.com";
+    const { accountId, fromAddress } = await getZohoAccountInfo(accessToken);
 
     const url = `https://mail.zoho.com/api/accounts/${accountId}/messages`;
 
-    await axios.post(
+    const res = await axios.post(
       url,
       {
-        fromAddress: fromAddress,
+        fromAddress,
         toAddress: (to || "").trim().toLowerCase(),
         subject,
         content: html,
@@ -24,6 +49,7 @@ export async function sendEmail({ to, subject, html }) {
           Authorization: `Zoho-oauthtoken ${accessToken}`,
           "Content-Type": "application/json",
         },
+        timeout: 15000
       }
     );
 
