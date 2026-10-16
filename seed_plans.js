@@ -6,7 +6,7 @@ async function main() {
   console.log("Updating global settings...");
   const settings = await prisma.settings.findFirst();
   const settingsData = {
-    registration_bonus: 3.0,
+    registration_bonus: 2.5,
     welcome_bonus_destination: "deposit",
     min_deposit: 30.0,
     min_withdrawal: 20.0,
