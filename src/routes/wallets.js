@@ -69,7 +69,7 @@ router.post('/send-otp', authenticate, async (req, res) => {
       return res.status(500).json({ success: false, error: 'Failed to deliver verification code to your email. Please try again.' });
     }
 
-    res.json({ success: true, message: `Verification code sent to ${user.email}` });
+    res.json({ success: true, message: 'Verification code sent to your email' });
   } catch (error) {
     console.error('Send wallet link OTP error:', error);
     res.status(500).json({ success: false, error: 'Failed to send verification code' });

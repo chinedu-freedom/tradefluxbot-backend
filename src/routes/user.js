@@ -1103,7 +1103,7 @@ router.post('/me/payment/send-otp', authenticate, async (req, res) => {
       });
     }
 
-    res.json({ success: true, message: `Verification code sent to ${user.email}` });
+    res.json({ success: true, message: 'Verification code sent to your email' });
   } catch (error) {
     console.error('Send payment OTP error:', error);
     res.status(500).json({ 
