@@ -6,7 +6,7 @@
 const otpStore = new Map(); // Key: `${userId}:${purpose}` -> { code, expiresAt, lastSentAt, metadata }
 
 const OTP_EXPIRY_MS = 10 * 60 * 1000; // 10 minutes
-const RESEND_COOLDOWN_MS = 60 * 1000;  // 60 seconds
+const RESEND_COOLDOWN_MS = 30 * 1000;  // 60 seconds
 
 export function generateSecurityOtp(userId, purpose, metadata = {}) {
   const key = `${userId}:${purpose}`;
@@ -19,7 +19,7 @@ export function generateSecurityOtp(userId, purpose, metadata = {}) {
       success: false,
       cooldown: true,
       remainingSeconds,
-      message: `Please wait ${remainingSeconds}s before requesting a new code.`
+      message: `A verification code was recently sent. Please wait ${remainingSeconds}s before requesting a new code.`
     };
   }
 

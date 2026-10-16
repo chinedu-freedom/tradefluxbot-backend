@@ -1091,6 +1091,7 @@ router.post('/me/payment/send-otp', authenticate, async (req, res) => {
     });
 
     if (!emailRes?.success) {
+      clearSecurityOtp(req.user.id, 'PAYMENT_PASSWORD_RESET');
       return res.status(500).json({ success: false, message: 'Failed to deliver verification code to your email. Please try again.' });
     }
 
