@@ -78,7 +78,7 @@ async function makeAllPlansFlexible() {
       console.log(`[BOOT] Converted ${updatedPlans.count} plans to Flexible`);
     }
 
-    // 2. Unlock any locked profits for active investments
+    // 2. Unlock ALL past accumulated profits for active investments that were fixed
     const activeInvestments = await prisma.investments.findMany({
       where: {
         status: { in: ['ACTIVE', 'active'] }
@@ -87,51 +87,56 @@ async function makeAllPlansFlexible() {
     });
 
     for (const inv of activeInvestments) {
-      // Find all 'locked_profit' transactions for this investment that haven't been unlocked
-      const lockedTxs = await prisma.transactions.findMany({
+      const totalAccumulated = parseFloat(inv.total_paid || 0);
+
+      // Check how much profit was already paid out to wallet for this investment
+      const paidTxs = await prisma.transactions.findMany({
         where: {
           user_id: inv.user_id,
           reference_id: inv.id,
-          type: 'locked_profit'
+          type: 'profit'
         }
       });
+      const alreadyPaid = paidTxs.reduce((sum, tx) => sum + parseFloat(tx.amount || 0), 0);
 
-      if (lockedTxs.length > 0) {
-        const totalLocked = lockedTxs.reduce((sum, tx) => sum + parseFloat(tx.amount || 0), 0);
-        if (totalLocked > 0) {
-          const user = await prisma.users.findUnique({ where: { id: inv.user_id } });
-          if (user) {
-            const currentBal = parseFloat(user.withdrawable_balance || 0);
-            const newBal = currentBal + totalLocked;
-            await prisma.users.update({
-              where: { id: inv.user_id },
-              data: { withdrawable_balance: newBal }
-            });
+      // Amount that was earned in the past while fixed and hasn't dropped to wallet yet
+      const unpaidProfit = Math.max(0, totalAccumulated - alreadyPaid);
 
-            // Record as unlocked profit
-            await prisma.transactions.create({
-              data: {
-                user_id: inv.user_id,
-                type: 'profit',
-                amount: totalLocked,
-                balance_before: currentBal,
-                balance_after: newBal,
-                description: `Unlocked earnings for ${inv.plan.name} (Flexible)`,
-                reference_id: inv.id
-              }
-            });
+      if (unpaidProfit > 0) {
+        const user = await prisma.users.findUnique({ where: { id: inv.user_id } });
+        if (user) {
+          const currentBal = parseFloat(user.withdrawable_balance || 0);
+          const newBal = currentBal + unpaidProfit;
 
-            // Remove or convert the old 'locked_profit' txs so they don't count twice
-            await prisma.transactions.deleteMany({
-              where: {
-                user_id: inv.user_id,
-                reference_id: inv.id,
-                type: 'locked_profit'
-              }
-            });
+          // Credit the past earnings to user's withdrawable balance immediately
+          await prisma.users.update({
+            where: { id: inv.user_id },
+            data: { withdrawable_balance: newBal }
+          });
 
-            console.log(`[BOOT] Unlocked $${totalLocked} for user ${user.email} on plan ${inv.plan.name}`);
-          }
+          // Record transaction so user sees their past earnings have dropped into their wallet
+          await prisma.transactions.create({
+            data: {
+              user_id: inv.user_id,
+              type: 'profit',
+              amount: unpaidProfit,
+              balance_before: currentBal,
+              balance_after: newBal,
+              description: `Accumulated earnings credited for ${inv.plan.name} (Converted to Flexible)`,
+              reference_id: inv.id
+            }
+          });
+
+          // Clean up old 'locked_profit' placeholder transactions so user history is clean
+          await prisma.transactions.deleteMany({
+            where: {
+              user_id: inv.user_id,
+              reference_id: inv.id,
+              type: 'locked_profit'
+            }
+          });
+
+          console.log(`[BOOT] Successfully unlocked ${unpaidProfit.toFixed(2)} past earnings for user ${user.email} on ${inv.plan.name}`);
         }
       }
     }
