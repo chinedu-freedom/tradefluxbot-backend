@@ -144,4 +144,4 @@ async function makeAllPlansFlexible() {
     console.error('[BOOT] Error making plans flexible:', err.message);
   }
 }
-makeAllPlansFlexible();
+// makeAllPlansFlexible(); // Disabled: All plans already flexible, prevents double credit on boot
