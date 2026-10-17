@@ -20,10 +20,10 @@ async function main() {
   // ==========================================
   const ziggyAmount = 203.00;
   const ziggyDailyProfit = 10.15; // 5% of 203
-  const ziggy6DaysProfit = 60.90; // 6 * 10.15
-  const ziggyRefBonus = 15.15;    // 5% from Nelzateb's 303
+  const ziggy7DaysProfit = 71.05; // 7 * 10.15 = 71.05
+  const ziggyRefBonus = 15.15;    // 5% from Nelzateb's $303
   const ziggyCheckin = 0.10;
-  const ziggyTotalWithdrawable = Number((ziggy6DaysProfit + ziggyRefBonus + ziggyCheckin).toFixed(2)); // 76.15
+  const ziggyTotalWithdrawable = Number((ziggy7DaysProfit + ziggyRefBonus + ziggyCheckin).toFixed(2)); // $86.30
 
   // Update Ziggy's user balance
   await prisma.users.update({
@@ -41,7 +41,7 @@ async function main() {
   });
 
   // Update Ziggy's investment to $203.00, daily $10.15, total_paid $60.90
-  const ziggyStartDate = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
+  const ziggyStartDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
   const ziggyEndDate = new Date(ziggyStartDate.getTime() + 90 * 24 * 60 * 60 * 1000);
 
   const ziggyInv = await prisma.investments.findFirst({
@@ -54,16 +54,16 @@ async function main() {
       data: {
         amount: ziggyAmount,
         daily_profit: ziggyDailyProfit,
-        total_paid: ziggy6DaysProfit,
+        total_paid: ziggy7DaysProfit,
         remaining_paid: ziggyAmount,
         start_date: ziggyStartDate,
         end_date: ziggyEndDate
       }
     });
 
-    // Update 6 profit records to $10.15 each
+    // Update 7 profit records to $10.15 each
     await prisma.investment_profits.deleteMany({ where: { investment_id: ziggyInv.id } });
-    for (let d = 1; d <= 6; d++) {
+    for (let d = 1; d <= 7; d++) {
       await prisma.investment_profits.create({
         data: {
           investment_id: ziggyInv.id,
