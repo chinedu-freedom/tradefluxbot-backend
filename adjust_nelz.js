@@ -28,7 +28,7 @@ async function main() {
   // End date: 90 days after start date
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - 1); // Yesterday
-  startDate.setHours(23, 0, 0, 0); // 11:00 PM
+  startDate.setHours(22, 55, 0, 0); // 10:55 PM
 
   const endDate = new Date(startDate.getTime() + 90 * 24 * 60 * 60 * 1000);
 

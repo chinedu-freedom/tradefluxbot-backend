@@ -101,12 +101,12 @@ async function main() {
   // ==========================================
   const nelzAmount = 303.00;
   const nelzDailyProfit = 15.15; // 5% of 303
-  const nelzTotalWithdrawable = 0.10; // Checkin only; earns $15.15 at 11:00 PM tonight
+  const nelzTotalWithdrawable = 0.10; // Checkin only; earns $15.15 at 10:55 PM tonight
 
-  // Start date: Yesterday at 11:00 PM (23:00) so first payout is 11:00 PM tonight
+  // Start date: Yesterday at 10:55 PM (22:55) so first payout is 10:55 PM tonight
   const nelzStartDate = new Date();
   nelzStartDate.setDate(nelzStartDate.getDate() - 1);
-  nelzStartDate.setHours(23, 0, 0, 0);
+  nelzStartDate.setHours(22, 55, 0, 0); // 10:55 PM exact investment time
   const nelzEndDate = new Date(nelzStartDate.getTime() + 90 * 24 * 60 * 60 * 1000);
 
   // Update Nelz user balance
@@ -179,7 +179,7 @@ async function main() {
   console.log('2. Nelzateb (nelzateb):');
   console.log(`   - Invested: $${nelzAmount}`);
   console.log(`   - Daily Profit: $${nelzDailyProfit}/day`);
-  console.log(`   - Earned Profit: $0.00 (First $15.15 drops at 11:00 PM tonight)`);
+  console.log(`   - Earned Profit: $0.00 (First $15.15 drops at 10:55 PM tonight)`);
   console.log(`   - Withdrawable Balance: $${nelzTotalWithdrawable}`);
   console.log('3. Rich Queen (RichQueen):');
   console.log(`   - 5% Referral Commission from Ziggy ($203): $${richCommission}`);
