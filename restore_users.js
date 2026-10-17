@@ -72,7 +72,7 @@ async function main() {
         language_id: lang.id,
         referral_code: 'RICH' + Math.floor(1000 + Math.random() * 9000),
         balance: 0.00,
-        withdrawable_balance: 10.155, // 5% commission from Ziggyteb's 203.10
+        withdrawable_balance: 12.095, // 5% commission from Ziggyteb's 203.10
         email_verified: true,
         is_active: true,
       },
