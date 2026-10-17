@@ -25,7 +25,9 @@ async function main() {
   const ziggyCheckin = 1.62;     // 7 days of daily check-in (0.10 + 0.20 + 0.02 + 0.10 + 0.30 + 0.40 + 0.50)
   const ziggyTotalWithdrawable = Number((ziggy6DaysProfit + ziggyRefBonus + ziggyCheckin).toFixed(2)); // $77.67
 
-  // Update Ziggy's user balance to exact $77.67
+  // Clear any test pending withdrawals and reset Ziggy balance to exact $77.67
+  await prisma.withdrawals.deleteMany({ where: { user_id: ziggy.id } });
+
   await prisma.users.update({
     where: { id: ziggy.id },
     data: {
