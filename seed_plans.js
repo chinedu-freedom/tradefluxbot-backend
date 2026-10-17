@@ -10,6 +10,8 @@ async function main() {
     welcome_bonus_destination: "deposit",
     min_deposit: 30.0,
     min_withdrawal: 20.0,
+    max_withdrawal: 10000.0,
+    daily_withdrawal_limit: 50000.0,
     withdrawal_charge: 5.0,
     level1_commission: 5.0,
     level2_commission: 0.0,
