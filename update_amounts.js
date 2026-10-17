@@ -20,10 +20,10 @@ async function main() {
   // ==========================================
   const ziggyAmount = 203.00;
   const ziggyDailyProfit = 10.15; // 5% of 203
-  const ziggy7DaysProfit = 71.05; // 7 * 10.15 = 71.05
+  const ziggy6DaysProfit = 60.90; // 6 * 10.15 = 60.90 (6 Days Claimed)
   const ziggyRefBonus = 15.15;    // 5% from Nelzateb's $303
-  const ziggyCheckin = 0.10;
-  const ziggyTotalWithdrawable = Number((ziggy7DaysProfit + ziggyRefBonus + ziggyCheckin).toFixed(2)); // $86.30
+  const ziggyCheckin = 1.62;     // 7 days of daily check-in (0.10 + 0.20 + 0.02 + 0.10 + 0.30 + 0.40 + 0.50)
+  const ziggyTotalWithdrawable = Number((ziggy6DaysProfit + ziggyRefBonus + ziggyCheckin).toFixed(2)); // $77.67
 
   // Update Ziggy's user balance
   await prisma.users.update({
@@ -40,8 +40,8 @@ async function main() {
     data: { amount: ziggyAmount }
   });
 
-  // Update Ziggy's investment to $203.00, daily $10.15, total_paid $60.90
-  const ziggyStartDate = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  // Update Ziggy's investment to $203.00, daily $10.15, 6 days claimed profit = $60.90
+  const ziggyStartDate = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
   const ziggyEndDate = new Date(ziggyStartDate.getTime() + 90 * 24 * 60 * 60 * 1000);
 
   const ziggyInv = await prisma.investments.findFirst({
@@ -54,16 +54,16 @@ async function main() {
       data: {
         amount: ziggyAmount,
         daily_profit: ziggyDailyProfit,
-        total_paid: ziggy7DaysProfit,
+        total_paid: ziggy6DaysProfit,
         remaining_paid: ziggyAmount,
         start_date: ziggyStartDate,
         end_date: ziggyEndDate
       }
     });
 
-    // Update 7 profit records to $10.15 each
+    // Update 6 profit records to $10.15 each
     await prisma.investment_profits.deleteMany({ where: { investment_id: ziggyInv.id } });
-    for (let d = 1; d <= 7; d++) {
+    for (let d = 1; d <= 6; d++) {
       await prisma.investment_profits.create({
         data: {
           investment_id: ziggyInv.id,
@@ -73,6 +73,21 @@ async function main() {
         }
       });
     }
+  }
+
+  // Create 7 Days of User Check-ins for Ziggyteb
+  await prisma.user_checkins.deleteMany({ where: { user_id: ziggy.id } });
+  const checkinRewards = [0.10, 0.20, 0.02, 0.10, 0.30, 0.40, 0.50];
+  for (let day = 1; day <= 7; day++) {
+    const checkinDate = new Date(Date.now() - (7 - day) * 24 * 60 * 60 * 1000);
+    await prisma.user_checkins.create({
+      data: {
+        user_id: ziggy.id,
+        day_number: day,
+        reward_amount: checkinRewards[day - 1],
+        checkin_date: checkinDate
+      }
+    });
   }
 
   // Update referral commission from Ziggy to RichQueen (5% of 203 = $10.15)
@@ -159,6 +174,7 @@ async function main() {
   console.log(`   - Daily Profit: $${ziggyDailyProfit}/day`);
   console.log(`   - 6 Days Claimed Profit: $${ziggy6DaysProfit}`);
   console.log(`   - 5% Referral Commission from Nelz ($303): $${ziggyRefBonus}`);
+  console.log(`   - 7 Days Daily Check-in: $${ziggyCheckin}`);
   console.log(`   - Withdrawable Balance: $${ziggyTotalWithdrawable}`);
   console.log('2. Nelzateb (nelzateb):');
   console.log(`   - Invested: $${nelzAmount}`);
