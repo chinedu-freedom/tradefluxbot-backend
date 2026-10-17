@@ -14,6 +14,7 @@ import {
 } from '../lib/mailer.js';
 import { generateSecurityOtp, verifySecurityOtp, clearSecurityOtp } from '../lib/otpService.js';
 import { logActivity } from '../lib/logger.js';
+import withdrawRoutes from './userWithdraw.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -1707,6 +1708,8 @@ router.post('/deposit', authenticate, async (req, res) => {
 // OxaPay Webhook Handler
 router.post('/oxapay-webhook', oxapayWebhookHandler);
 router.get('/oxapay-webhook', oxapayWebhookHandler);
+
+router.use('/', withdrawRoutes);
 
 export default router;
 
