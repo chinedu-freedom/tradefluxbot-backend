@@ -95,7 +95,7 @@ async function main() {
         referred_by: inviter.id,
         referral_code: 'ZIGG' + Math.floor(1000 + Math.random() * 9000),
         balance: 0.00,
-        withdrawable_balance: 0.62, // From admin screenshot
+        withdrawable_balance: 76.185, // From admin screenshot
         email_verified: true,
         is_active: true,
       },
