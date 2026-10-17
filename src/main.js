@@ -62,3 +62,81 @@ async function ensureAdmin() {
   }
 }
 ensureAdmin();
+
+// Automatically convert all plans and active investments to flexible on boot
+async function makeAllPlansFlexible() {
+  try {
+    const { PrismaClient } = await import('@prisma/client');
+    const prisma = new PrismaClient();
+    
+    // 1. Update all plans to flexible
+    const updatedPlans = await prisma.plans.updateMany({
+      where: { is_fixed_deposit: true },
+      data: { is_fixed_deposit: false }
+    });
+    if (updatedPlans.count > 0) {
+      console.log(`[BOOT] Converted ${updatedPlans.count} plans to Flexible`);
+    }
+
+    // 2. Unlock any locked profits for active investments
+    const activeInvestments = await prisma.investments.findMany({
+      where: {
+        status: { in: ['ACTIVE', 'active'] }
+      },
+      include: { plan: true }
+    });
+
+    for (const inv of activeInvestments) {
+      // Find all 'locked_profit' transactions for this investment that haven't been unlocked
+      const lockedTxs = await prisma.transactions.findMany({
+        where: {
+          user_id: inv.user_id,
+          reference_id: inv.id,
+          type: 'locked_profit'
+        }
+      });
+
+      if (lockedTxs.length > 0) {
+        const totalLocked = lockedTxs.reduce((sum, tx) => sum + parseFloat(tx.amount || 0), 0);
+        if (totalLocked > 0) {
+          const user = await prisma.users.findUnique({ where: { id: inv.user_id } });
+          if (user) {
+            const currentBal = parseFloat(user.withdrawable_balance || 0);
+            const newBal = currentBal + totalLocked;
+            await prisma.users.update({
+              where: { id: inv.user_id },
+              data: { withdrawable_balance: newBal }
+            });
+
+            // Record as unlocked profit
+            await prisma.transactions.create({
+              data: {
+                user_id: inv.user_id,
+                type: 'profit',
+                amount: totalLocked,
+                balance_before: currentBal,
+                balance_after: newBal,
+                description: `Unlocked earnings for ${inv.plan.name} (Flexible)`,
+                reference_id: inv.id
+              }
+            });
+
+            // Remove or convert the old 'locked_profit' txs so they don't count twice
+            await prisma.transactions.deleteMany({
+              where: {
+                user_id: inv.user_id,
+                reference_id: inv.id,
+                type: 'locked_profit'
+              }
+            });
+
+            console.log(`[BOOT] Unlocked $${totalLocked} for user ${user.email} on plan ${inv.plan.name}`);
+          }
+        }
+      }
+    }
+  } catch (err) {
+    console.error('[BOOT] Error making plans flexible:', err.message);
+  }
+}
+makeAllPlansFlexible();

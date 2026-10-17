@@ -41,7 +41,7 @@ async function main() {
   const plans = [
     {
       name: "Starter",
-      description: "Advertised minimum: 3% for 20 days. Fast, short-term earnings.",
+      description: "Flexible trading contract. Daily profits credited directly to your withdrawable balance. Earn and withdraw anytime.",
       duration: 20,
       daily_income: 3.0,
       min_investment: 30.0,
@@ -52,24 +52,24 @@ async function main() {
     },
     {
       name: "Growth Contract",
-      description: "Deposits & advertised profit available after trading duration is completed.",
+      description: "Flexible trading contract. Daily profits credited directly to your withdrawable balance. Earn and withdraw anytime.",
       duration: 90,
       daily_income: 5.0,
       min_investment: 100.0,
       max_investment: 9999.0,
       capital_return: true,
-      is_fixed_deposit: true,
+      is_fixed_deposit: false,
       status: true,
     },
     {
       name: "Prestige VIP",
-      description: "Deposits & advertised profit available after trading duration is completed.",
+      description: "Flexible trading contract. Daily profits credited directly to your withdrawable balance. Earn and withdraw anytime.",
       duration: 90,
       daily_income: 6.5,
       min_investment: 10000.0,
       max_investment: 1000000.0,
       capital_return: true,
-      is_fixed_deposit: true,
+      is_fixed_deposit: false,
       status: true,
     },
   ];
