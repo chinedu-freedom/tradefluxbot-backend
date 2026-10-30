@@ -1,5 +1,6 @@
 import { oxapayWebhookHandler, syncPendingOxaPayDeposits } from '../lib/depositApproval.js';
 import { distributeDepositReferralCommission } from '../lib/referral.js';
+import { RANK_TIERS, isFriday, getUserTeamAndVolume, checkAndAwardRankRewards } from '../lib/ranks.js';
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
 import { authenticate } from '../middleware/auth.js';
@@ -101,6 +102,9 @@ router.get('/me', authenticate, async (req, res) => {
         balance: user.balance,
         withdrawable_balance: user.withdrawable_balance,
         gift_balance: user.gift_balance,
+        team_commission_balance: user.team_commission_balance || 0,
+        current_rank: user.current_rank || 0,
+        is_friday: isFriday(),
         locked_profits: lockedProfits,
         country: user.country,
         language: user.language,
@@ -834,16 +838,46 @@ router.get('/team', authenticate, async (req, res) => {
     const l3Valid = level3Users.filter(u => u.investments.length > 0).length;
     const l4Valid = level4Users.filter(u => u.investments.length > 0).length;
 
-    // Calculate Total Deposits per level
+    // Calculate Total Deposits per level (case-insensitive for APPROVED)
     const calcDeposits = (users) => users.reduce((acc, user) => {
-      const userDeposits = user.deposits?.filter(d => d.status === 'approved').reduce((sum, d) => sum + parseFloat(d.amount), 0) || 0;
+      const userDeposits = user.deposits?.filter(d => String(d.status).toUpperCase() === 'APPROVED').reduce((sum, d) => sum + parseFloat(d.amount), 0) || 0;
       return acc + userDeposits;
     }, 0);
 
-    const l1Deposits = calcDeposits(level1Users);
-    const l2Deposits = calcDeposits(level2Users);
-    const l3Deposits = calcDeposits(level3Users);
-    const l4Deposits = calcDeposits(level4Users);
+    const l1Deposits = Number(calcDeposits(level1Users).toFixed(2));
+    const l2Deposits = Number(calcDeposits(level2Users).toFixed(2));
+    const l3Deposits = Number(calcDeposits(level3Users).toFixed(2));
+    const l4Deposits = Number(calcDeposits(level4Users).toFixed(2));
+
+    const directVolume = l1Deposits;
+    const teamVolume = Number((l1Deposits + l2Deposits + l3Deposits + l4Deposits).toFixed(2));
+
+    // Award any newly qualified ranks
+    await checkAndAwardRankRewards(prisma, userId);
+
+    const claimedRanks = await prisma.user_rank_rewards.findMany({
+      where: { user_id: userId },
+      orderBy: { rank_level: 'asc' }
+    });
+
+    const userRecord = await prisma.users.findUnique({
+      where: { id: userId },
+      select: { current_rank: true, withdrawable_balance: true, team_commission_balance: true }
+    });
+
+    const isFridayToday = isFriday(settings?.timezone);
+
+    const rankTiersProgress = RANK_TIERS.map(tier => {
+      const isClaimed = claimedRanks.some(r => r.rank_level === tier.rank_level);
+      const currentVolume = tier.type === 'DIRECT_VOLUME' ? directVolume : teamVolume;
+      const progressPercent = Math.min(100, Math.round((currentVolume / tier.target_volume) * 100));
+      return {
+        ...tier,
+        is_claimed: isClaimed,
+        current_volume: currentVolume,
+        progress_percent: progressPercent
+      };
+    });
 
     // Get Referral Commissions
     const commissions = await prisma.referral_commissions.findMany({
@@ -874,6 +908,16 @@ router.get('/team', authenticate, async (req, res) => {
           new_members_today: newMembersToday,
           new_earnings_today: newEarningsToday,
           total_team: allTeamMembers.length
+        },
+        ranks: {
+          current_rank: userRecord?.current_rank || 0,
+          direct_volume: directVolume,
+          team_volume: teamVolume,
+          is_friday: isFridayToday,
+          everyday_balance: Number(userRecord?.withdrawable_balance || 0),
+          team_commission_balance: Number(userRecord?.team_commission_balance || 0),
+          claimed_rewards: claimedRanks,
+          tiers: rankTiersProgress
         },
         levels: [
           {

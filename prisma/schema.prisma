@@ -40,6 +40,8 @@ model users {
   language_id      String    @db.Uuid
   balance          Decimal   @default(0) @db.Decimal(18, 8)
   withdrawable_balance Decimal @default(0) @db.Decimal(18, 8)
+  team_commission_balance Decimal @default(0) @db.Decimal(18, 8)
+  current_rank     Int       @default(0)
   gift_balance     Decimal   @default(0) @db.Decimal(18, 8)
   referral_code    String    @unique
   referred_by      String?   @db.Uuid
@@ -81,6 +83,7 @@ model users {
   password_resets     password_resets[]
   investment_profits  investment_profits[]
   user_wallets        user_wallets[]
+  rank_rewards        user_rank_rewards[]
 
   @@map("users")
 }
@@ -632,3 +635,19 @@ model user_wallets {
   @@unique([user_id, symbol, network])
   @@map("user_wallets")
 }
+
+model user_rank_rewards {
+  id              String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id         String   @db.Uuid
+  rank_level      Int      // 1, 2, 3, 4
+  rank_name       String   // "Rank 1", "Rank 2", "Rank 3", "Rank 4"
+  reward_amount   Decimal  @db.Decimal(18, 8)
+  volume_achieved Decimal  @db.Decimal(18, 8)
+  created_at      DateTime @default(now())
+
+  user users @relation(fields: [user_id], references: [id], onDelete: Cascade)
+
+  @@unique([user_id, rank_level])
+  @@map("user_rank_rewards")
+}
+

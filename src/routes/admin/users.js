@@ -376,11 +376,15 @@ router.post('/:id/credit', async (req, res) => {
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
     const isWithdrawable = balance_type === 'withdrawable';
-    const currentBalance = isWithdrawable ? Number(user.withdrawable_balance) : Number(user.balance);
-    const newBalance = currentBalance + numAmount;
+    const isTeamCommission = balance_type === 'team_commission';
+    let currentBalance = Number(user.balance);
+    if (isWithdrawable) currentBalance = Number(user.withdrawable_balance);
+    else if (isTeamCommission) currentBalance = Number(user.team_commission_balance);
+    const newBalance = Number((currentBalance + numAmount).toFixed(2));
 
     const updateData = {};
     if (isWithdrawable) updateData.withdrawable_balance = newBalance;
+    else if (isTeamCommission) updateData.team_commission_balance = newBalance;
     else updateData.balance = newBalance;
 
     const updatedUser = await prisma.$transaction([
@@ -434,14 +438,18 @@ router.post('/:id/debit', async (req, res) => {
     if (!user) return res.status(404).json({ success: false, error: 'User not found' });
 
     const isWithdrawable = balance_type === 'withdrawable';
-    const currentBalance = isWithdrawable ? Number(user.withdrawable_balance) : Number(user.balance);
+    const isTeamCommission = balance_type === 'team_commission';
+    let currentBalance = Number(user.balance);
+    if (isWithdrawable) currentBalance = Number(user.withdrawable_balance);
+    else if (isTeamCommission) currentBalance = Number(user.team_commission_balance);
     if (currentBalance < numAmount) {
       return res.status(400).json({ success: false, error: 'Insufficient balance for debit' });
     }
-    const newBalance = currentBalance - numAmount;
+    const newBalance = Number((currentBalance - numAmount).toFixed(2));
 
     const updateData = {};
     if (isWithdrawable) updateData.withdrawable_balance = newBalance;
+    else if (isTeamCommission) updateData.team_commission_balance = newBalance;
     else updateData.balance = newBalance;
 
     const updatedUser = await prisma.$transaction([

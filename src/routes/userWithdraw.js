@@ -5,6 +5,7 @@ import bcrypt from 'bcrypt';
 import { sendWithdrawalNotificationEmail, sendWithdrawalOtpEmail } from '../lib/mailer.js';
 import { generateSecurityOtp, verifySecurityOtp } from '../lib/otpService.js';
 import { logActivity } from '../lib/logger.js';
+import { isFriday } from '../lib/ranks.js';
 
 const router = Router();
 const prisma = new PrismaClient();
@@ -41,8 +42,18 @@ router.post('/withdraw/send-otp', authenticate, async (req, res) => {
       return res.status(400).json({ success: false, message: `Maximum withdrawal amount is ${symbol}${maxAmount}` });
     }
 
-    const withdrawableBal = Number(user.withdrawable_balance || 0);
-    if (withdrawableBal < Number(amount)) {
+    const isFridayToday = isFriday(settings?.timezone);
+    const everydayBal = Number(user.withdrawable_balance || 0);
+    const teamBal = Number(user.team_commission_balance || 0);
+    const totalAvailable = isFridayToday ? Number((everydayBal + teamBal).toFixed(2)) : everydayBal;
+
+    if (Number(amount) > totalAvailable) {
+      if (!isFridayToday && teamBal > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Your everyday withdrawable balance is ${symbol}${everydayBal.toFixed(2)}. Your team referral commission (${symbol}${teamBal.toFixed(2)}) can only be withdrawn on Fridays.`
+        });
+      }
       return res.status(400).json({ success: false, message: 'Insufficient withdrawable balance' });
     }
 
@@ -147,9 +158,18 @@ router.post('/withdraw', authenticate, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Incorrect withdrawal password' });
     }
 
-    const withdrawableBal = Number(user.withdrawable_balance || 0);
+    const isFridayToday = isFriday(settings?.timezone);
+    const everydayBal = Number(user.withdrawable_balance || 0);
+    const teamBal = Number(user.team_commission_balance || 0);
+    const totalAvailable = isFridayToday ? Number((everydayBal + teamBal).toFixed(2)) : everydayBal;
 
-    if (withdrawableBal < numAmount) {
+    if (numAmount > totalAvailable) {
+      if (!isFridayToday && teamBal > 0) {
+        return res.status(400).json({
+          success: false,
+          message: `Your everyday withdrawable balance is ${symbol}${everydayBal.toFixed(2)}. Your team referral commission (${symbol}${teamBal.toFixed(2)}) can only be withdrawn on Fridays.`
+        });
+      }
       return res.status(400).json({ success: false, message: 'Insufficient withdrawable balance' });
     }
 
@@ -157,15 +177,25 @@ router.post('/withdraw', authenticate, async (req, res) => {
     const netAmount = Number((numAmount - fees).toFixed(2));
     const methodStr = method === 'crypto' || !method ? (network || 'Crypto') : method;
 
+    // Deduct from everyday balance first, then remaining from team commission balance
+    const deductEveryday = Math.min(numAmount, everydayBal);
+    const deductTeam = Number((numAmount - deductEveryday).toFixed(2));
+
     let withdrawalResult;
 
     await prisma.$transaction(async (tx) => {
-      // 1. Deduct from user's withdrawable balance
+      // 1. Deduct from balances
+      const updateData = {};
+      if (deductEveryday > 0) {
+        updateData.withdrawable_balance = { decrement: deductEveryday };
+      }
+      if (deductTeam > 0) {
+        updateData.team_commission_balance = { decrement: deductTeam };
+      }
+
       await tx.users.update({
         where: { id: userId },
-        data: {
-          withdrawable_balance: { decrement: numAmount }
-        }
+        data: updateData
       });
 
       // 2. Create withdrawal record
@@ -187,10 +217,10 @@ router.post('/withdraw', authenticate, async (req, res) => {
           user_id: userId,
           type: 'WITHDRAWAL',
           amount: numAmount,
-          balance_before: withdrawableBal,
-          balance_after: withdrawableBal - numAmount,
+          balance_before: totalAvailable,
+          balance_after: Number((totalAvailable - numAmount).toFixed(2)),
           reference_id: withdrawalResult.id,
-          description: `Withdrawal request via ${methodStr}`
+          description: `Withdrawal request via ${methodStr}${deductTeam > 0 ? ` ($${deductEveryday.toFixed(2)} everyday + $${deductTeam.toFixed(2)} Friday team commission)` : ''}`
         }
       });
     });
