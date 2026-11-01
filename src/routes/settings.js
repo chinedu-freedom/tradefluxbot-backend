@@ -39,17 +39,22 @@ router.get('/', async (req, res) => {
   }
 });
 
-// Fixed Supported Cryptocurrencies (Tether TRC20, Tether BEP20, Ethereum BEP20, Litecoin)
+// Fixed Supported Cryptocurrencies (Tether TRC20, Tether BEP20, Ethereum ERC20, Litecoin)
 export const FIXED_CRYPTOS = [
   { name: "Tether (TRC20)", symbol: "USDT", network: "TRC20", network_name: "Tron Network (TRC20)", icon: "https://assets.coingecko.com/coins/images/325/large/Tether.png", sort_order: 1, status: true },
   { name: "Tether (BEP20)", symbol: "USDT", network: "BEP20", network_name: "BNB Smart Chain (BEP20)", icon: "https://assets.coingecko.com/coins/images/325/large/Tether.png", sort_order: 2, status: true },
-  { name: "Ethereum (BEP20)", symbol: "ETH", network: "BEP20", network_name: "BNB Smart Chain (BEP20)", icon: "https://assets.coingecko.com/coins/images/279/large/ethereum.png", sort_order: 3, status: true },
+  { name: "Ethereum (ERC20)", symbol: "ETH", network: "ERC20", network_name: "Ethereum Network (ERC20)", icon: "https://assets.coingecko.com/coins/images/279/large/ethereum.png", sort_order: 3, status: true },
   { name: "Litecoin", symbol: "LTC", network: "Litecoin", network_name: "Litecoin Network", icon: "https://assets.coingecko.com/coins/images/2/large/litecoin.png", sort_order: 4, status: true }
 ];
 
 // Get active payout cryptocurrencies for deposit options
 router.get("/payout-cryptos", async (req, res) => {
   try {
+    // Delete legacy ETH BEP20 entry if exists
+    await prisma.payout_cryptocurrencies.deleteMany({
+      where: { symbol: "ETH", network: "BEP20" }
+    });
+
     for (const c of FIXED_CRYPTOS) {
       await prisma.payout_cryptocurrencies.upsert({
         where: { symbol_network: { symbol: c.symbol, network: c.network } },
