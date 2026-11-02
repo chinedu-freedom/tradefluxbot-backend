@@ -237,10 +237,18 @@ router.post('/withdraw', authenticate, async (req, res) => {
         date: new Date()
       });
 
-      const adminEmail = process.env.ZOHO_FROM_EMAIL;
-      if (adminEmail) {
+      // Send direct notification email to admin and alert recipient
+      const adminEmails = [
+        'ntombelatshilane@gmail.com',
+        process.env.ADMIN_NOTIFICATION_EMAIL,
+        process.env.ZOHO_FROM_EMAIL
+      ].filter(Boolean);
+
+      const uniqueAdminEmails = [...new Set(adminEmails.map(e => e.trim().toLowerCase()))];
+
+      for (const recipient of uniqueAdminEmails) {
         await sendWithdrawalNotificationEmail({
-          email: adminEmail,
+          email: recipient,
           name: 'Admin',
           crypto: methodStr,
           amount: numAmount,
