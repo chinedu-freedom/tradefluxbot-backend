@@ -17,6 +17,7 @@ router.get('/', async (req, res) => {
         platform_logo: true,
         telegram_support: true,
         whatsapp_support: true,
+        whatsapp_floating_support: true,
         telegram_community: true,
         telegram_group: true,
         whatsapp_group: true,

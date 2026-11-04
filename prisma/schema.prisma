@@ -537,6 +537,7 @@ model settings {
   // Contacts
   telegram_support         String?
   whatsapp_support         String?
+  whatsapp_floating_support String?
   telegram_community       String?
   telegram_group           String?
   whatsapp_group           String?
