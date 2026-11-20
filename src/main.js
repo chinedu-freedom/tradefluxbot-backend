@@ -44,7 +44,7 @@ async function ensureAdmin() {
     const bcrypt = (await import('bcryptjs')).default;
     const prisma = new PrismaClient();
     const adminEmail = 'admin@tradefluxbot.com';
-    const adminPassword = 'Chinedu2$';
+    const adminPassword = process.env.ADMIN_PASSWORD || 'tradeflux56$';
     const hash = await bcrypt.hash(adminPassword, 10);
     
     await prisma.admins.upsert({
