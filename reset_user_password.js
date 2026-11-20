@@ -4,17 +4,31 @@ import bcrypt from 'bcryptjs';
 const prisma = new PrismaClient();
 
 async function main() {
-  const email = (process.argv[2] || 'Page20410@gmail.com').trim().toLowerCase();
-  const newPassword = process.argv[3] || 'Tradeflux2026!';
+  const input = (process.argv[2] || 'Page20410@gmail.com').trim();
+  const newPassword = process.argv[3] || 'Pumeza@2026!';
 
-  console.log(`Resetting password for user: ${email}...`);
+  console.log(`Resetting password for user: ${input}...`);
 
-  const user = await prisma.users.findUnique({
-    where: { email }
+  let user = await prisma.users.findFirst({
+    where: {
+      email: { equals: input, mode: 'insensitive' }
+    }
   });
 
   if (!user) {
-    console.error(`Error: User with email ${email} not found!`);
+    user = await prisma.users.findFirst({
+      where: {
+        OR: [
+          { email: input },
+          { email: input.toLowerCase() },
+          { username: { equals: input, mode: 'insensitive' } }
+        ]
+      }
+    });
+  }
+
+  if (!user) {
+    console.error(`Error: User with email/username "${input}" not found!`);
     process.exit(1);
   }
 
