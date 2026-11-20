@@ -37,26 +37,32 @@ app.listen(port, () => {
 // Triggering restart
 
 
-// Ensure default admin credentials exist and match on server start
+// Ensure default admin credentials exist on server start (only creates if missing, does not overwrite)
 async function ensureAdmin() {
   try {
     const { PrismaClient } = await import('@prisma/client');
     const bcrypt = (await import('bcryptjs')).default;
     const prisma = new PrismaClient();
     const adminEmail = 'admin@tradefluxbot.com';
-    const adminPassword = process.env.ADMIN_PASSWORD || 'tradeflux56$';
-    const hash = await bcrypt.hash(adminPassword, 10);
-    
-    await prisma.admins.upsert({
-      where: { email: adminEmail },
-      update: { password_hash: hash },
-      create: {
-        email: adminEmail,
-        password_hash: hash,
-        role: 'superadmin'
-      }
+
+    const existing = await prisma.admins.findUnique({
+      where: { email: adminEmail }
     });
-    console.log(`[BOOT] Admin account verified (${adminEmail})`);
+
+    if (!existing) {
+      const adminPassword = process.env.ADMIN_PASSWORD || 'tradeflux56$';
+      const hash = await bcrypt.hash(adminPassword, 10);
+      await prisma.admins.create({
+        data: {
+          email: adminEmail,
+          password_hash: hash,
+          role: 'superadmin'
+        }
+      });
+      console.log(`[BOOT] Default admin account created (${adminEmail})`);
+    } else {
+      console.log(`[BOOT] Admin account verified (${adminEmail})`);
+    }
   } catch (err) {
     console.error('[BOOT] Error verifying admin credentials:', err.message);
   }
