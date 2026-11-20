@@ -102,12 +102,21 @@ router.post('/withdraw', authenticate, async (req, res) => {
       return res.status(400).json({ success: false, message: 'Valid withdrawal amount is required' });
     }
 
-    if (!wallet_address || !String(wallet_address).trim()) {
+    const cleanAddress = String(wallet_address).trim();
+    if (!cleanAddress) {
       return res.status(400).json({ success: false, message: 'Wallet address is required' });
     }
 
     if (!password) {
       return res.status(400).json({ success: false, message: 'Withdrawal password is required' });
+    }
+
+    // Verify wallet address belongs to the user's linked wallets
+    const linkedWallet = await prisma.user_wallets.findFirst({
+      where: { user_id: userId, address: cleanAddress }
+    });
+    if (!linkedWallet) {
+      return res.status(400).json({ success: false, message: 'Withdrawals can only be sent to a verified linked wallet address.' });
     }
 
     // If OTP was provided, verify it
@@ -145,15 +154,12 @@ router.post('/withdraw', authenticate, async (req, res) => {
       return res.status(403).json({ success: false, message: 'Withdrawals are currently disabled for your account' });
     }
 
-    // Verify withdrawal password (check withdrawal_pin or fallback to password_hash)
-    let isPasswordValid = false;
-    if (user.withdrawal_pin) {
-      isPasswordValid = await bcrypt.compare(password, user.withdrawal_pin);
-    }
-    if (!isPasswordValid && user.password_hash) {
-      isPasswordValid = await bcrypt.compare(password, user.password_hash);
+    // Verify withdrawal password (strictly check withdrawal_pin)
+    if (!user.withdrawal_pin) {
+      return res.status(400).json({ success: false, message: 'Please set your withdrawal password in settings before requesting a withdrawal.' });
     }
 
+    const isPasswordValid = await bcrypt.compare(password, user.withdrawal_pin);
     if (!isPasswordValid) {
       return res.status(400).json({ success: false, message: 'Incorrect withdrawal password' });
     }

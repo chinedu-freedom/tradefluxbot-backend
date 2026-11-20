@@ -3,7 +3,7 @@ import { distributeDepositReferralCommission } from '../lib/referral.js';
 import { RANK_TIERS, isFriday, getUserTeamAndVolume, checkAndAwardRankRewards } from '../lib/ranks.js';
 import { Router } from 'express';
 import { PrismaClient } from '@prisma/client';
-import { authenticate } from '../middleware/auth.js';
+import { authenticate, requireAdmin } from '../middleware/auth.js';
 import bcrypt from 'bcrypt';
 import {
   sendVerificationEmail,
@@ -20,7 +20,7 @@ import withdrawRoutes from './userWithdraw.js';
 const router = Router();
 const prisma = new PrismaClient();
 
-router.get('/', async (req, res) => {
+router.get('/', authenticate, requireAdmin, async (req, res) => {
   try {
     const users = await prisma.users.findMany({
       select: {

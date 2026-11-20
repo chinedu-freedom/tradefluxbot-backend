@@ -329,7 +329,7 @@ router.post('/verify-otp', async (req, res) => {
     const reset = await prisma.password_resets.findFirst({
       where: {
         user_id: user.id,
-        token: otp,
+        token: String(otp).trim(),
         used: false,
         expires_at: { gt: new Date() }
       }
@@ -337,7 +337,14 @@ router.post('/verify-otp', async (req, res) => {
 
     if (!reset) return res.status(400).json({ error: 'Invalid or expired OTP' });
 
-    res.json({ success: true, message: 'OTP verified' });
+    // Mark as verified by updating the token with a secure VERIFIED prefix
+    const verifiedToken = `VERIFIED_${Date.now()}_${Math.random().toString(36).substring(2, 10)}`;
+    await prisma.password_resets.update({
+      where: { id: reset.id },
+      data: { token: verifiedToken }
+    });
+
+    res.json({ success: true, message: 'OTP verified', resetToken: verifiedToken });
   } catch (error) {
     console.error('Verify OTP error:', error);
     res.status(500).json({ error: 'Failed to verify OTP' });
@@ -346,23 +353,49 @@ router.post('/verify-otp', async (req, res) => {
 
 // Reset Password
 router.post('/reset-password', async (req, res) => {
-  const { email, newPassword } = req.body;
+  const { email, newPassword, resetToken, otp } = req.body;
   if (!email || !newPassword) return res.status(400).json({ error: 'Email and new password are required' });
 
   try {
     const user = await prisma.users.findUnique({ where: { email } });
     if (!user) return res.status(400).json({ error: 'Invalid request' });
 
-    const reset = await prisma.password_resets.findFirst({
-      where: {
-        user_id: user.id,
-        used: false,
-        expires_at: { gt: new Date() }
-      },
-      orderBy: { created_at: 'desc' }
-    });
+    // Strictly ensure that the user went through OTP verification
+    let reset;
+    if (resetToken) {
+      reset = await prisma.password_resets.findFirst({
+        where: {
+          user_id: user.id,
+          token: resetToken,
+          used: false,
+          expires_at: { gt: new Date() }
+        }
+      });
+    } else if (otp) {
+      reset = await prisma.password_resets.findFirst({
+        where: {
+          user_id: user.id,
+          token: String(otp).trim(),
+          used: false,
+          expires_at: { gt: new Date() }
+        }
+      });
+    } else {
+      // Must have verified through /verify-otp
+      reset = await prisma.password_resets.findFirst({
+        where: {
+          user_id: user.id,
+          token: { startsWith: 'VERIFIED_' },
+          used: false,
+          expires_at: { gt: new Date() }
+        },
+        orderBy: { created_at: 'desc' }
+      });
+    }
 
-    if (!reset) return res.status(400).json({ error: 'No active password reset session found' });
+    if (!reset) {
+      return res.status(400).json({ error: 'Invalid or unverified password reset session. Please enter the OTP sent to your email.' });
+    }
 
     const password_hash = await bcrypt.hash(newPassword, 10);
 
@@ -405,7 +438,7 @@ router.post('/admin/forgot-password', async (req, res) => {
     const otp = Math.floor(1000 + Math.random() * 9000).toString();
     const expires_at = Date.now() + 10 * 60 * 1000; // 10 mins
 
-    adminPasswordResets.set(email, { otp, expires_at });
+    adminPasswordResets.set(email, { otp, expires_at, verified: false });
 
     await sendPasswordResetEmail(admin.email, admin.username || 'Admin', otp);
 
@@ -423,9 +456,12 @@ router.post('/admin/verify-otp', async (req, res) => {
 
   try {
     const record = adminPasswordResets.get(email);
-    if (!record || record.otp !== otp || record.expires_at < Date.now()) {
+    if (!record || record.otp !== String(otp).trim() || record.expires_at < Date.now()) {
       return res.status(400).json({ error: 'Invalid or expired OTP' });
     }
+
+    record.verified = true;
+    adminPasswordResets.set(email, record);
 
     res.json({ success: true, message: 'OTP verified' });
   } catch (error) {
@@ -436,7 +472,7 @@ router.post('/admin/verify-otp', async (req, res) => {
 
 // Admin Reset Password
 router.post('/admin/reset-password', async (req, res) => {
-  const { email, newPassword } = req.body;
+  const { email, newPassword, otp } = req.body;
   if (!email || !newPassword) return res.status(400).json({ error: 'Email and new password are required' });
 
   try {
@@ -446,6 +482,11 @@ router.post('/admin/reset-password', async (req, res) => {
     const record = adminPasswordResets.get(email);
     if (!record || record.expires_at < Date.now()) {
       return res.status(400).json({ error: 'No active password reset session found' });
+    }
+
+    // Must be verified via verify-otp OR directly provide the correct OTP
+    if (!record.verified && (!otp || record.otp !== String(otp).trim())) {
+      return res.status(400).json({ error: 'Please verify the OTP sent to your email before resetting your password' });
     }
 
     const password_hash = await bcrypt.hash(newPassword, 10);

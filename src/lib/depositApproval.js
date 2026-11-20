@@ -128,20 +128,39 @@ export async function oxapayWebhookHandler(req, res) {
 
     if (rawStatus === '2' || rawStatus === 'paid') {
       const paidAmount = Number(payload.amount) || 0;
-      let deposit = null;
-      if (trackId) {
-        deposit = await prisma.deposits.findFirst({
-          where: { track_id: trackId, status: { in: ['PENDING', 'initiated'] } }
-        });
+      if (!trackId) {
+        return res.status(400).json({ error: 'Missing trackId' });
       }
-      if (!deposit) {
-        deposit = await prisma.deposits.findFirst({
-          where: { amount: paidAmount, status: { in: ['PENDING', 'initiated'] } }
-        });
-      }
+
+      const deposit = await prisma.deposits.findFirst({
+        where: { track_id: trackId, status: { in: ['PENDING', 'initiated'] } }
+      });
 
       if (!deposit) {
         return res.status(200).json({ ok: true });
+      }
+
+      // Verify directly with OxaPay inquiry API to prevent webhook spoofing
+      const OXAPAY_MERCHANT_KEY = process.env.OXAPAY_MERCHANT_KEY;
+      if (OXAPAY_MERCHANT_KEY && deposit.track_id) {
+        try {
+          const verifyRes = await fetch("https://api.oxapay.com/merchants/inquiry", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({
+              merchant: OXAPAY_MERCHANT_KEY,
+              trackId: deposit.track_id
+            })
+          });
+          const verifyData = await verifyRes.json();
+          if (verifyData.result !== 100 || String(verifyData.status).toLowerCase() !== 'paid') {
+            console.warn(`[OXAPAY_WEBHOOK] Untrusted or unpaid webhook rejected for trackId: ${deposit.track_id}`, verifyData);
+            return res.status(400).json({ error: 'Payment verification failed' });
+          }
+        } catch (vErr) {
+          console.error('[OXAPAY_WEBHOOK] Failed to verify payment with OxaPay inquiry API:', vErr);
+          return res.status(500).json({ error: 'Gateway verification error' });
+        }
       }
 
       await processApprovedDeposit(deposit, {
