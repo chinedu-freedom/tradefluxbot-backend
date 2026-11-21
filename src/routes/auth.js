@@ -247,21 +247,70 @@ router.post('/login', async (req, res) => {
   }
 });
 
+// In-memory rate limiting for admin login to prevent brute force
+const adminLoginAttempts = new Map();
+
+function checkAdminRateLimit(ip) {
+  const now = Date.now();
+  const record = adminLoginAttempts.get(ip) || { count: 0, firstAttempt: now, blockedUntil: 0 };
+
+  if (record.blockedUntil > now) {
+    const waitMins = Math.ceil((record.blockedUntil - now) / 60000);
+    return { blocked: true, message: `Too many failed admin login attempts. Access temporarily locked for ${waitMins} minute(s).` };
+  }
+
+  // Reset window after 15 minutes of inactivity
+  if (now - record.firstAttempt > 15 * 60 * 1000) {
+    record.count = 0;
+    record.firstAttempt = now;
+  }
+
+  return { blocked: false, record };
+}
+
+function recordAdminFailedAttempt(ip, record) {
+  record.count += 1;
+  if (record.count >= 5) {
+    record.blockedUntil = Date.now() + 15 * 60 * 1000; // Lockout for 15 minutes
+  }
+  adminLoginAttempts.set(ip, record);
+}
+
 // Admin Login
 router.post('/admin/login', async (req, res) => {
   const rawEmail = (req.body.email || '').toString().trim().toLowerCase();
   const rawPassword = (req.body.password || '').toString().trim();
 
+  const clientIp = (req.headers['x-forwarded-for'] 
+    ? req.headers['x-forwarded-for'].split(',')[0].trim() 
+    : req.socket.remoteAddress || req.ip) || 'Unknown';
+
+  const rateCheck = checkAdminRateLimit(clientIp);
+  if (rateCheck.blocked) {
+    return res.status(429).json({ error: rateCheck.message });
+  }
+
+  // Strictly enforce that only the sole authorized admin email can log in
+  if (rawEmail !== 'admin@tradefluxbot.com') {
+    recordAdminFailedAttempt(clientIp, rateCheck.record);
+    return res.status(401).json({ error: 'Invalid admin credentials' });
+  }
+
   try {
     const admin = await prisma.admins.findUnique({ where: { email: rawEmail } });
     if (!admin) {
+      recordAdminFailedAttempt(clientIp, rateCheck.record);
       return res.status(401).json({ error: 'Invalid admin credentials' });
     }
 
     const isValid = await bcrypt.compare(rawPassword, admin.password_hash);
     if (!isValid) {
+      recordAdminFailedAttempt(clientIp, rateCheck.record);
       return res.status(401).json({ error: 'Invalid admin credentials' });
     }
+
+    // Login succeeded: reset failed attempts
+    adminLoginAttempts.delete(clientIp);
 
     const { keepMeLoggedIn } = req.body;
     const expiresIn = keepMeLoggedIn ? '24h' : '1h';
@@ -279,6 +328,20 @@ router.post('/admin/login', async (req, res) => {
   } catch (error) {
     res.status(500).json({ error: 'Admin login failed', details: error.message });
   }
+});
+
+// Admin Registration is strictly prohibited
+router.all([
+  '/admin/register',
+  '/admin/signup',
+  '/admin/create',
+  '/register/admin',
+  '/signup/admin'
+], (req, res) => {
+  return res.status(403).json({
+    success: false,
+    error: 'Admin registration is strictly prohibited.'
+  });
 });
 
 // Password reset endpoints disabled for security

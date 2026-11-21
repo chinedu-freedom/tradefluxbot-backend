@@ -39,6 +39,9 @@ router.patch('/', async (req, res) => {
     const { username, email, dateOfBirth, city, postalCode, image } = req.body;
 
     if (email) {
+      if (email.toLowerCase().trim() !== 'admin@tradefluxbot.com') {
+        return res.status(403).json({ success: false, message: 'Primary admin email is locked and cannot be changed.' });
+      }
       const existing = await prisma.admins.findFirst({
         where: {
           email,
